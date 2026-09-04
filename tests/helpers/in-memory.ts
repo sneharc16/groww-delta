@@ -1,0 +1,102 @@
+import type { InstrumentRecord } from "@/domain/instrument/types";
+import type { WatchIntentRecord } from "@/domain/intent/types";
+import type { DemoStateRecord, MarketEventRecord, MarketSnapshotRecord } from "@/domain/market/types";
+import type {
+  CreateIntentRecordInput,
+  DemoSessionRepository,
+  InstrumentRepository,
+  MarketEventRepository,
+  MarketSnapshotRepository,
+  WatchIntentRepository,
+  WatchlistItemRecord,
+  WatchlistRecord,
+  WatchlistRepository,
+} from "@/server/repositories/contracts";
+
+export const testInstrument: InstrumentRecord = {
+  id: "NSE:TCS", symbol: "TCS", exchange: "NSE", name: "Tata Consultancy Services", sector: "IT", currency: "INR", isActive: true,
+};
+
+export function intentRecord(input: Partial<WatchIntentRecord> = {}): WatchIntentRecord {
+  const now = new Date("2025-08-14T04:30:00.000Z");
+  return {
+    id: "version-1", logicalIntentId: "logical-1", userId: "demo-user", instrumentId: "NSE:TCS", type: "EARNINGS",
+    originalText: "Watching Q2 margins", structuredPayload: { focus: ["MARGINS"], quarterLabel: "Q2" },
+    provenanceSource: "RESULTS_CALENDAR", provenanceReference: null, status: "ACTIVE", version: 1, supersedesId: null,
+    horizon: null, expiresAt: null, createdAt: now, updatedAt: now, ...input,
+  };
+}
+
+export class MemoryInstrumentRepository implements InstrumentRepository {
+  constructor(public rows: InstrumentRecord[] = [testInstrument]) {}
+  async listActive() { return this.rows.filter((row) => row.isActive); }
+  async findById(id: string) { return this.rows.find((row) => row.id === id) ?? null; }
+}
+
+export class MemoryIntentRepository implements WatchIntentRepository {
+  constructor(public rows: WatchIntentRecord[] = []) {}
+  async listForInstrument(userId: string, instrumentId: string) { return this.rows.filter((row) => row.userId === userId && row.instrumentId === instrumentId); }
+  async findCurrent(userId: string, logicalIntentId: string) { return this.rows.find((row) => row.userId === userId && row.logicalIntentId === logicalIntentId && row.status === "ACTIVE") ?? null; }
+  async create(input: CreateIntentRecordInput) {
+    const row = intentRecord({ ...input, status: "ACTIVE", createdAt: new Date(), updatedAt: new Date() });
+    this.rows.push(row); return row;
+  }
+  async supersedeAndCreate(previousId: string, input: CreateIntentRecordInput) {
+    const previous = this.rows.find((row) => row.id === previousId);
+    if (!previous) throw new Error("missing previous intent");
+    previous.status = "SUPERSEDED";
+    return this.create(input);
+  }
+  async archiveCurrent(id: string) {
+    const row = this.rows.find((candidate) => candidate.id === id);
+    if (!row) throw new Error("missing intent");
+    row.status = "ARCHIVED"; return row;
+  }
+}
+
+export class MemoryDemoSessionRepository implements DemoSessionRepository {
+  constructor(public state: DemoStateRecord = {
+    id: "default-demo-session", scenarioId: "groww-delta-default", currentStep: 0, currentSequence: 0,
+    currentTime: new Date("2025-08-14T04:30:00.000Z"),
+  }) {}
+  async getById(id: string) { return id === this.state.id ? { ...this.state } : null; }
+  async setPosition(id: string, currentStep: number, currentSequence: number, currentTime: Date) {
+    if (id !== this.state.id) throw new Error("missing session");
+    this.state = { ...this.state, currentStep, currentSequence, currentTime }; return { ...this.state };
+  }
+}
+
+export class MemorySnapshotRepository implements MarketSnapshotRepository {
+  constructor(public rows: MarketSnapshotRecord[]) {}
+  async findCurrent(instrumentId: string, sequence: number) { return this.rows.filter((row) => row.instrumentId === instrumentId && row.sequence <= sequence).sort((a, b) => b.sequence - a.sequence)[0] ?? null; }
+  async findCurrentMany(ids: string[], sequence: number) {
+    return (await Promise.all(ids.map((id) => this.findCurrent(id, sequence)))).filter((row): row is MarketSnapshotRecord => row !== null);
+  }
+  async listThroughSequence(instrumentId: string, sequence: number) { return this.rows.filter((row) => row.instrumentId === instrumentId && row.sequence <= sequence).sort((a, b) => a.sequence - b.sequence); }
+}
+
+export class MemoryEventRepository implements MarketEventRepository {
+  constructor(public rows: MarketEventRecord[]) {}
+  async listBetweenSequences(start: number, end: number) { return this.rows.filter((row) => row.sequence > start && row.sequence <= end); }
+}
+
+export class MemoryWatchlistRepository implements WatchlistRepository {
+  constructor(public record: WatchlistRecord) {}
+  async getDefaultForUser(userId: string) { return this.record.userId === userId ? { ...this.record, items: this.record.items.filter((item) => item.archivedAt === null) } : null; }
+  async findActiveItem(watchlistId: string, instrumentId: string) { return this.record.items.find((item) => item.watchlistId === watchlistId && item.instrumentId === instrumentId && item.archivedAt === null) ?? null; }
+  async addItem(watchlistId: string, instrumentId: string) {
+    const instrument = testInstrument;
+    const item: WatchlistItemRecord = { id: `item-${this.record.items.length + 1}`, watchlistId, instrumentId, addedAt: new Date(), archivedAt: null, provenanceSource: "MANUAL", provenanceReference: null, instrument };
+    this.record.items.push(item); return item;
+  }
+  async archiveItem(itemId: string, watchlistId: string, archivedAt: Date) {
+    const row = this.record.items.find((item) => item.id === itemId && item.watchlistId === watchlistId && item.archivedAt === null);
+    if (!row) return false;
+    row.archivedAt = archivedAt; return true;
+  }
+}
+
+export function watchlistRecord(items: WatchlistItemRecord[] = []): WatchlistRecord {
+  const now = new Date("2025-08-14T04:30:00.000Z");
+  return { id: "demo-watchlist", userId: "demo-user", name: "My Watchlist", createdAt: now, updatedAt: now, items };
+}

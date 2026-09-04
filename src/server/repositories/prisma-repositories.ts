@@ -1,0 +1,151 @@
+import { Prisma } from "@/generated/prisma/client";
+import { prisma } from "@/lib/db/client";
+import type {
+  CreateIntentRecordInput,
+  DemoSessionRepository,
+  InstrumentRepository,
+  MarketEventRepository,
+  MarketSnapshotRepository,
+  WatchIntentRepository,
+  WatchlistRepository,
+} from "./contracts";
+
+const instrumentSelect = {
+  id: true,
+  symbol: true,
+  exchange: true,
+  name: true,
+  sector: true,
+  currency: true,
+  isActive: true,
+} as const;
+
+export class PrismaInstrumentRepository implements InstrumentRepository {
+  listActive() {
+    return prisma.instrument.findMany({ where: { isActive: true }, select: instrumentSelect, orderBy: { symbol: "asc" } });
+  }
+
+  findById(id: string) {
+    return prisma.instrument.findUnique({ where: { id }, select: instrumentSelect });
+  }
+}
+
+export class PrismaWatchlistRepository implements WatchlistRepository {
+  getDefaultForUser(userId: string) {
+    return prisma.watchlist.findFirst({
+      where: { userId },
+      orderBy: { createdAt: "asc" },
+      include: {
+        items: {
+          where: { archivedAt: null },
+          orderBy: { addedAt: "asc" },
+          include: { instrument: { select: instrumentSelect } },
+        },
+      },
+    });
+  }
+
+  findActiveItem(watchlistId: string, instrumentId: string) {
+    return prisma.watchlistItem.findFirst({
+      where: { watchlistId, instrumentId, archivedAt: null },
+      include: { instrument: { select: instrumentSelect } },
+    });
+  }
+
+  addItem(watchlistId: string, instrumentId: string) {
+    return prisma.watchlistItem.create({
+      data: { watchlistId, instrumentId, provenanceSource: "MANUAL" },
+      include: { instrument: { select: instrumentSelect } },
+    });
+  }
+
+  async archiveItem(itemId: string, watchlistId: string, archivedAt: Date) {
+    const result = await prisma.watchlistItem.updateMany({
+      where: { id: itemId, watchlistId, archivedAt: null },
+      data: { archivedAt },
+    });
+    return result.count === 1;
+  }
+}
+
+function intentData(input: CreateIntentRecordInput) {
+  return {
+    ...input,
+    structuredPayload: input.structuredPayload as Prisma.InputJsonValue,
+  };
+}
+
+export class PrismaWatchIntentRepository implements WatchIntentRepository {
+  listForInstrument(userId: string, instrumentId: string) {
+    return prisma.watchIntent.findMany({
+      where: { userId, instrumentId },
+      orderBy: [{ logicalIntentId: "asc" }, { version: "desc" }],
+    });
+  }
+
+  findCurrent(userId: string, logicalIntentId: string) {
+    return prisma.watchIntent.findFirst({
+      where: { userId, logicalIntentId, status: "ACTIVE" },
+      orderBy: { version: "desc" },
+    });
+  }
+
+  create(input: CreateIntentRecordInput) {
+    return prisma.watchIntent.create({ data: intentData(input) });
+  }
+
+  async supersedeAndCreate(previousId: string, input: CreateIntentRecordInput) {
+    return prisma.$transaction(async (transaction) => {
+      const updated = await transaction.watchIntent.updateMany({
+        where: { id: previousId, status: "ACTIVE" },
+        data: { status: "SUPERSEDED" },
+      });
+      if (updated.count !== 1) throw new Error("Intent was changed before the edit could be saved.");
+      return transaction.watchIntent.create({ data: intentData(input) });
+    });
+  }
+
+  archiveCurrent(id: string) {
+    return prisma.watchIntent.update({ where: { id }, data: { status: "ARCHIVED" } });
+  }
+}
+
+export class PrismaDemoSessionRepository implements DemoSessionRepository {
+  getById(id: string) {
+    return prisma.demoSession.findUnique({ where: { id } });
+  }
+
+  setPosition(id: string, currentStep: number, currentSequence: number, currentTime: Date) {
+    return prisma.demoSession.update({ where: { id }, data: { currentStep, currentSequence, currentTime } });
+  }
+}
+
+export class PrismaMarketSnapshotRepository implements MarketSnapshotRepository {
+  findCurrent(instrumentId: string, currentSequence: number) {
+    return prisma.marketSnapshot.findFirst({ where: { instrumentId, sequence: { lte: currentSequence } }, orderBy: { sequence: "desc" } });
+  }
+
+  async findCurrentMany(instrumentIds: string[], currentSequence: number) {
+    if (instrumentIds.length === 0) return [];
+    const rows = await prisma.marketSnapshot.findMany({
+      where: { instrumentId: { in: instrumentIds }, sequence: { lte: currentSequence } },
+      orderBy: [{ instrumentId: "asc" }, { sequence: "desc" }],
+    });
+    const found = new Map<string, (typeof rows)[number]>();
+    for (const row of rows) if (!found.has(row.instrumentId)) found.set(row.instrumentId, row);
+    return [...found.values()];
+  }
+
+  listThroughSequence(instrumentId: string, currentSequence: number) {
+    return prisma.marketSnapshot.findMany({ where: { instrumentId, sequence: { lte: currentSequence } }, orderBy: { sequence: "asc" } });
+  }
+}
+
+export class PrismaMarketEventRepository implements MarketEventRepository {
+  listBetweenSequences(exclusiveStart: number, inclusiveEnd: number) {
+    return prisma.marketEvent.findMany({
+      where: { sequence: { gt: exclusiveStart, lte: inclusiveEnd } },
+      orderBy: [{ sequence: "asc" }, { eventTime: "asc" }, { id: "asc" }],
+    });
+  }
+}
