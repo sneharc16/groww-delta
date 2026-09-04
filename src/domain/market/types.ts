@@ -12,6 +12,7 @@ export interface MarketSnapshotRecord {
   lowPaise: number;
   cumulativeVolume: bigint;
   expectedCumulativeVolume: bigint | null;
+  expectedStepMoveBps: number | null;
   source: string;
   quality: MarketQuality;
 }
@@ -35,4 +36,16 @@ export interface DemoStateRecord {
   currentStep: number;
   currentSequence: number;
   currentTime: Date;
+}
+
+export interface KnowledgeCursorRecord {
+  id: string;
+  userId: string;
+  instrumentId: string;
+  lastSeenSequence: number;
+  lastSeenEventTime: Date | null;
+  lastObservedSnapshotId: string | null;
+  cursorVersion: number;
+  createdAt: Date;
+  updatedAt: Date;
 }

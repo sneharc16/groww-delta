@@ -1,25 +1,29 @@
 "use client";
 
 import { RotateCcw, StepForward } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import type { DemoStateDto, WatchlistDto } from "@/server/dto/types";
+import type { CatchUpDto, DemoStateDto, WatchlistDto } from "@/server/dto/types";
 import { apiFetch } from "@/lib/api/client";
 import { formatINRFromPaise, formatISTTime } from "@/lib/format/market";
 import { Button } from "@/components/ui/button";
 import { DemoBadge, ErrorState, LoadingState } from "@/components/ui/status";
+import { EngineDebug } from "./engine-debug";
 
 export function DemoScreen() {
   const [state, setState] = useState<DemoStateDto | null>(null);
   const [watchlist, setWatchlist] = useState<WatchlistDto | null>(null);
+  const [catchUp, setCatchUp] = useState<CatchUpDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [demoState, watchlistData] = await Promise.all([apiFetch<DemoStateDto>("/api/demo/state"), apiFetch<WatchlistDto>("/api/watchlist")]);
+      const [demoState, watchlistData, catchUpData] = await Promise.all([apiFetch<DemoStateDto>("/api/demo/state"), apiFetch<WatchlistDto>("/api/watchlist"), apiFetch<CatchUpDto>("/api/catch-up")]);
       setState(demoState);
       setWatchlist(watchlistData);
+      setCatchUp(catchUpData);
     } catch (caught: unknown) { setError(caught instanceof Error ? caught.message : "Could not load the demo."); }
   }, []);
 
@@ -38,9 +42,9 @@ export function DemoScreen() {
     finally { setBusy(false); }
   }
 
-  if ((!state || !watchlist) && !error) return <LoadingState label="Loading the replay scenario…" />;
+  if ((!state || !watchlist || !catchUp) && !error) return <LoadingState label="Loading the replay scenario…" />;
   if (error) return <ErrorState message={error} retry={() => void load()} />;
-  if (!state || !watchlist) return null;
+  if (!state || !watchlist || !catchUp) return null;
 
   return (
     <>
@@ -57,6 +61,7 @@ export function DemoScreen() {
           <div className="action-row">
             <Button onClick={() => void change("advance")} disabled={busy || state.atFinalStep}><StepForward size={17} />Advance market 30 minutes</Button>
             <Button variant="secondary" onClick={() => void change("reset")} disabled={busy || state.currentStep === 0}><RotateCcw size={16} />Reset scenario</Button>
+            <Link href="/" className="button button-ghost">View Catch Up</Link>
           </div>
           {message ? <p className="notice" role="status">{message}</p> : null}
           {state.atFinalStep ? <p className="muted">The demo market is at its final step.</p> : null}
@@ -73,10 +78,16 @@ export function DemoScreen() {
         </div>
       </section>
       <section className="card section-card upcoming-card">
-        <div className="section-title"><div><h2>Upcoming simulated events</h2><p>Replay events may appear as the sequence advances.</p></div></div>
-        <p>No future event detail is revealed by default. Build 1 stores and exposes occurred events without deciding whether they matter to you.</p>
-        <details><summary>Developer replay notes</summary><p>The scenario has four positions at 30-minute intervals. Deterministic market events occur at their assigned sequence and are returned by the market events API only after that point.</p></details>
+        <div className="section-title"><div><h2>Demo walkthrough</h2><p>Expected qualitative behavior from deterministic market inputs</p></div></div>
+        <ol className="walkthrough-list">
+          <li className={state.currentStep === 0 ? "current" : ""}><strong>Step 0 · Baseline</strong><span>The user starts caught up.</span></li>
+          <li className={state.currentStep === 1 ? "current" : ""}><strong>Step 1 · Normal movement</strong><span>Expected: nothing meaningful.</span></li>
+          <li className={state.currentStep === 2 ? "current" : ""}><strong>Step 2 · Meaningful changes</strong><span>Expected: four direct intent matches and Reliance significance.</span></li>
+          <li className={state.currentStep === 3 ? "current" : ""}><strong>Step 3 · Novelty test</strong><span>After Step 2 acknowledgement, old changes should not return.</span></li>
+        </ol>
+        <details><summary>Upcoming simulated events</summary><p>Future event detail is not revealed by default. Events become available to the engine only at their assigned sequence.</p></details>
       </section>
+      <EngineDebug catchUp={catchUp} />
     </>
   );
 }

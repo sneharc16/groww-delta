@@ -7,6 +7,15 @@ export function formatINRFromPaise(paise: number): string {
   }).format(paise / 100);
 }
 
+export function formatINRLevelFromPaise(paise: number): string {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(paise / 100);
+}
+
 export function formatPercentage(value: number): string {
   const sign = value > 0 ? "+" : "";
   return `${sign}${value.toFixed(2)}%`;

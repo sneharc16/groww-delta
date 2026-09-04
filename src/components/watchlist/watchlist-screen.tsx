@@ -2,7 +2,8 @@
 
 import { Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { InstrumentDto, WatchIntentDto, WatchlistDto, WatchlistItemDto } from "@/server/dto/types";
+import type { CatchUpDto, InstrumentDto, WatchIntentDto, WatchlistDto, WatchlistItemDto } from "@/server/dto/types";
+import type { AttentionLane } from "@/domain/attention/types";
 import { apiFetch } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { DemoBadge, ErrorState, LoadingState } from "@/components/ui/status";
@@ -13,6 +14,7 @@ import { WatchlistRow } from "./watchlist-row";
 export function WatchlistScreen() {
   const [data, setData] = useState<WatchlistDto | null>(null);
   const [instruments, setInstruments] = useState<InstrumentDto[]>([]);
+  const [attention, setAttention] = useState<Map<string, AttentionLane>>(new Map());
   const [error, setError] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -21,12 +23,14 @@ export function WatchlistScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [watchlist, universe] = await Promise.all([
+      const [watchlist, universe, catchUp] = await Promise.all([
         apiFetch<WatchlistDto>("/api/watchlist"),
         apiFetch<{ instruments: InstrumentDto[] }>("/api/instruments"),
+        apiFetch<CatchUpDto>("/api/catch-up"),
       ]);
       setData(watchlist);
       setInstruments(universe.instruments);
+      setAttention(new Map([...catchUp.relevant, ...catchUp.significant, ...catchUp.quiet].map((item) => [item.instrument.id, item.lane])));
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : "Could not load the watchlist.");
     }
@@ -95,7 +99,7 @@ export function WatchlistScreen() {
       <section className="card watchlist-card" aria-label="Watchlist stocks">
         <div className="watchlist-head"><span>Instrument</span><span>Current price</span><span>Why you&apos;re watching</span><span /></div>
         {data.items.length ? data.items.map((item) => (
-          <WatchlistRow key={item.id} item={item} onEdit={(row, intent) => setEditing({ item: row, intent })} onAddReason={(row) => setEditing({ item: row, intent: null })} onRemove={(row) => void removeStock(row)} />
+          <WatchlistRow key={item.id} item={item} attentionLane={attention.get(item.instrument.id) ?? "QUIET"} onEdit={(row, intent) => setEditing({ item: row, intent })} onAddReason={(row) => setEditing({ item: row, intent: null })} onRemove={(row) => void removeStock(row)} />
         )) : <div className="state-message">Your watchlist is empty. Add a demo stock to begin.</div>}
       </section>
       <AddStockDialog open={addOpen} instruments={available} busyId={busyId} onClose={() => setAddOpen(false)} onAdd={(instrument) => void addStock(instrument)} />

@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { defaultReplayScenario } from "../../../data/replay/default-scenario";
 import { DemoMarketService } from "./demo-market-service";
 import { ReplayMarketProvider } from "@/server/market/providers/replay-market-provider";
-import { MemoryDemoSessionRepository, MemoryEventRepository, MemorySnapshotRepository } from "../../../tests/helpers/in-memory";
+import { MemoryDemoSessionRepository, MemoryEventRepository, MemoryKnowledgeCursorRepository, MemorySnapshotRepository, MemoryWatchlistRepository, cursorRecord, intentRecord, testInstrument, watchlistRecord } from "../../../tests/helpers/in-memory";
+import type { WatchlistItemRecord } from "@/server/repositories/contracts";
 import type { MarketEventRecord, MarketSnapshotRecord } from "@/domain/market/types";
 
 const snapshots: MarketSnapshotRecord[] = defaultReplayScenario.steps.flatMap((step) => step.snapshots.map((snapshot) => ({
@@ -27,11 +28,16 @@ describe("deterministic replay", () => {
   let sessions: MemoryDemoSessionRepository;
   let service: DemoMarketService;
   let provider: ReplayMarketProvider;
+  let cursors: MemoryKnowledgeCursorRepository;
+  let intents: ReturnType<typeof intentRecord>[];
 
   beforeEach(() => {
     sessions = new MemoryDemoSessionRepository();
-    service = new DemoMarketService(sessions);
     provider = new ReplayMarketProvider(sessions, new MemorySnapshotRepository(snapshots), new MemoryEventRepository(events));
+    const item: WatchlistItemRecord = { id: "item-tcs", watchlistId: "demo-watchlist", instrumentId: "NSE:TCS", addedAt: new Date(), archivedAt: null, provenanceSource: "IMPORTED_DEMO", provenanceReference: null, instrument: testInstrument };
+    cursors = new MemoryKnowledgeCursorRepository([cursorRecord()]);
+    intents = [intentRecord()];
+    service = new DemoMarketService(provider, new MemoryWatchlistRepository(watchlistRecord([item])), cursors, provider);
   });
 
   it("returns the exact Step 0 snapshot", async () => {
@@ -44,7 +50,7 @@ describe("deterministic replay", () => {
     await service.advance();
     expect((await service.getState()).currentStep).toBe(1);
     expect((await provider.getCurrentSnapshot("NSE:TCS"))?.pricePaise).toBe(320600);
-    expect((await new DemoMarketService(sessions).getState()).currentStep).toBe(1);
+    expect((await new DemoMarketService(provider, new MemoryWatchlistRepository(watchlistRecord()), new MemoryKnowledgeCursorRepository(), provider).getState()).currentStep).toBe(1);
   });
 
   it("does not advance beyond the final replay step", async () => {
@@ -57,10 +63,14 @@ describe("deterministic replay", () => {
 
   it("resets exactly to Step 0", async () => {
     await service.advance(); await service.advance();
-    const reset = await service.reset();
+    await cursors.advanceMonotonic("demo-user", { instrumentId: "NSE:TCS", sequence: 2, eventTime: new Date(defaultReplayScenario.steps[2].eventTime), snapshotId: "snapshot:2:NSE:TCS" });
+    const intentHistory = structuredClone(intents);
+    const reset = await service.reset("demo-user");
     expect(reset.currentStep).toBe(0);
     expect(reset.currentSequence).toBe(0);
     expect(reset.currentTime).toBe(new Date(defaultReplayScenario.steps[0].eventTime).toISOString());
+    expect(cursors.rows[0]).toMatchObject({ lastSeenSequence: 0, lastObservedSnapshotId: "snapshot:0:NSE:TCS" });
+    expect(intents).toEqual(intentHistory);
   });
 
   it("returns only deterministic events after the requested sequence and through the current position", async () => {

@@ -16,6 +16,7 @@ export interface ReplaySnapshotFixture {
   lowPaise: number;
   cumulativeVolume: bigint;
   expectedCumulativeVolume: bigint;
+  expectedStepMoveBps: number;
 }
 
 export interface ReplayStep {
@@ -52,11 +53,11 @@ export const defaultReplayScenario = {
       sequence: 0,
       eventTime: "2025-08-14T10:00:00+05:30",
       snapshots: [
-        { instrumentId: "NSE:TCS", pricePaise: 320000, openPaise: 319500, highPaise: 320400, lowPaise: 319000, cumulativeVolume: 540000n, expectedCumulativeVolume: 560000n },
-        { instrumentId: "NSE:HDFCBANK", pricePaise: 158600, openPaise: 159200, highPaise: 159500, lowPaise: 158200, cumulativeVolume: 820000n, expectedCumulativeVolume: 800000n },
-        { instrumentId: "NSE:TATAMOTORS", pricePaise: 99500, openPaise: 99000, highPaise: 99700, lowPaise: 98800, cumulativeVolume: 1150000n, expectedCumulativeVolume: 1100000n },
-        { instrumentId: "NSE:INDIGO", pricePaise: 518000, openPaise: 516000, highPaise: 519000, lowPaise: 515500, cumulativeVolume: 210000n, expectedCumulativeVolume: 225000n },
-        { instrumentId: "NSE:RELIANCE", pricePaise: 141000, openPaise: 140500, highPaise: 141200, lowPaise: 140000, cumulativeVolume: 960000n, expectedCumulativeVolume: 940000n },
+        { instrumentId: "NSE:TCS", pricePaise: 320000, openPaise: 319500, highPaise: 320400, lowPaise: 319000, cumulativeVolume: 540000n, expectedCumulativeVolume: 560000n, expectedStepMoveBps: 35 },
+        { instrumentId: "NSE:HDFCBANK", pricePaise: 158600, openPaise: 159200, highPaise: 159500, lowPaise: 158200, cumulativeVolume: 820000n, expectedCumulativeVolume: 800000n, expectedStepMoveBps: 40 },
+        { instrumentId: "NSE:TATAMOTORS", pricePaise: 99500, openPaise: 99000, highPaise: 99700, lowPaise: 98800, cumulativeVolume: 1150000n, expectedCumulativeVolume: 1100000n, expectedStepMoveBps: 45 },
+        { instrumentId: "NSE:INDIGO", pricePaise: 518000, openPaise: 516000, highPaise: 519000, lowPaise: 515500, cumulativeVolume: 210000n, expectedCumulativeVolume: 225000n, expectedStepMoveBps: 30 },
+        { instrumentId: "NSE:RELIANCE", pricePaise: 141000, openPaise: 140500, highPaise: 141200, lowPaise: 140000, cumulativeVolume: 960000n, expectedCumulativeVolume: 940000n, expectedStepMoveBps: 80 },
       ],
     },
     {
@@ -64,11 +65,11 @@ export const defaultReplayScenario = {
       sequence: 1,
       eventTime: "2025-08-14T10:30:00+05:30",
       snapshots: [
-        { instrumentId: "NSE:TCS", pricePaise: 320600, openPaise: 319500, highPaise: 320900, lowPaise: 319000, cumulativeVolume: 890000n, expectedCumulativeVolume: 900000n },
-        { instrumentId: "NSE:HDFCBANK", pricePaise: 157400, openPaise: 159200, highPaise: 159500, lowPaise: 157200, cumulativeVolume: 1320000n, expectedCumulativeVolume: 1280000n },
-        { instrumentId: "NSE:TATAMOTORS", pricePaise: 99900, openPaise: 99000, highPaise: 100000, lowPaise: 98800, cumulativeVolume: 1850000n, expectedCumulativeVolume: 1780000n },
-        { instrumentId: "NSE:INDIGO", pricePaise: 517800, openPaise: 516000, highPaise: 519000, lowPaise: 515500, cumulativeVolume: 335000n, expectedCumulativeVolume: 350000n },
-        { instrumentId: "NSE:RELIANCE", pricePaise: 142500, openPaise: 140500, highPaise: 142800, lowPaise: 140000, cumulativeVolume: 1530000n, expectedCumulativeVolume: 1500000n },
+        { instrumentId: "NSE:TCS", pricePaise: 320600, openPaise: 319500, highPaise: 320900, lowPaise: 319000, cumulativeVolume: 890000n, expectedCumulativeVolume: 900000n, expectedStepMoveBps: 35 },
+        { instrumentId: "NSE:HDFCBANK", pricePaise: 157400, openPaise: 159200, highPaise: 159500, lowPaise: 157200, cumulativeVolume: 1320000n, expectedCumulativeVolume: 1280000n, expectedStepMoveBps: 51 },
+        { instrumentId: "NSE:TATAMOTORS", pricePaise: 99900, openPaise: 99000, highPaise: 100000, lowPaise: 98800, cumulativeVolume: 1850000n, expectedCumulativeVolume: 1780000n, expectedStepMoveBps: 45 },
+        { instrumentId: "NSE:INDIGO", pricePaise: 517800, openPaise: 516000, highPaise: 519000, lowPaise: 515500, cumulativeVolume: 335000n, expectedCumulativeVolume: 350000n, expectedStepMoveBps: 30 },
+        { instrumentId: "NSE:RELIANCE", pricePaise: 142500, openPaise: 140500, highPaise: 142800, lowPaise: 140000, cumulativeVolume: 1530000n, expectedCumulativeVolume: 1500000n, expectedStepMoveBps: 80 },
       ],
     },
     {
@@ -76,11 +77,11 @@ export const defaultReplayScenario = {
       sequence: 2,
       eventTime: "2025-08-14T11:00:00+05:30",
       snapshots: [
-        { instrumentId: "NSE:TCS", pricePaise: 321200, openPaise: 319500, highPaise: 321500, lowPaise: 319000, cumulativeVolume: 1340000n, expectedCumulativeVolume: 1320000n },
-        { instrumentId: "NSE:HDFCBANK", pricePaise: 156200, openPaise: 159200, highPaise: 159500, lowPaise: 156000, cumulativeVolume: 2020000n, expectedCumulativeVolume: 1900000n },
-        { instrumentId: "NSE:TATAMOTORS", pricePaise: 100300, openPaise: 99000, highPaise: 100500, lowPaise: 98800, cumulativeVolume: 2840000n, expectedCumulativeVolume: 2550000n },
-        { instrumentId: "NSE:INDIGO", pricePaise: 518100, openPaise: 516000, highPaise: 519300, lowPaise: 515500, cumulativeVolume: 510000n, expectedCumulativeVolume: 490000n },
-        { instrumentId: "NSE:RELIANCE", pricePaise: 144200, openPaise: 140500, highPaise: 144500, lowPaise: 140000, cumulativeVolume: 2470000n, expectedCumulativeVolume: 2150000n },
+        { instrumentId: "NSE:TCS", pricePaise: 321200, openPaise: 319500, highPaise: 321500, lowPaise: 319000, cumulativeVolume: 1340000n, expectedCumulativeVolume: 1320000n, expectedStepMoveBps: 35 },
+        { instrumentId: "NSE:HDFCBANK", pricePaise: 156200, openPaise: 159200, highPaise: 159500, lowPaise: 156000, cumulativeVolume: 2020000n, expectedCumulativeVolume: 1900000n, expectedStepMoveBps: 40 },
+        { instrumentId: "NSE:TATAMOTORS", pricePaise: 100300, openPaise: 99000, highPaise: 100500, lowPaise: 98800, cumulativeVolume: 2840000n, expectedCumulativeVolume: 1280000n, expectedStepMoveBps: 45 },
+        { instrumentId: "NSE:INDIGO", pricePaise: 518100, openPaise: 516000, highPaise: 519300, lowPaise: 515500, cumulativeVolume: 510000n, expectedCumulativeVolume: 490000n, expectedStepMoveBps: 30 },
+        { instrumentId: "NSE:RELIANCE", pricePaise: 144200, openPaise: 140500, highPaise: 144500, lowPaise: 140000, cumulativeVolume: 2470000n, expectedCumulativeVolume: 2150000n, expectedStepMoveBps: 80 },
       ],
     },
     {
@@ -88,11 +89,11 @@ export const defaultReplayScenario = {
       sequence: 3,
       eventTime: "2025-08-14T11:30:00+05:30",
       snapshots: [
-        { instrumentId: "NSE:TCS", pricePaise: 321800, openPaise: 319500, highPaise: 322000, lowPaise: 319000, cumulativeVolume: 1780000n, expectedCumulativeVolume: 1720000n },
-        { instrumentId: "NSE:HDFCBANK", pricePaise: 155800, openPaise: 159200, highPaise: 159500, lowPaise: 155500, cumulativeVolume: 2650000n, expectedCumulativeVolume: 2480000n },
-        { instrumentId: "NSE:TATAMOTORS", pricePaise: 100700, openPaise: 99000, highPaise: 100900, lowPaise: 98800, cumulativeVolume: 3610000n, expectedCumulativeVolume: 3300000n },
-        { instrumentId: "NSE:INDIGO", pricePaise: 518400, openPaise: 516000, highPaise: 519500, lowPaise: 515500, cumulativeVolume: 675000n, expectedCumulativeVolume: 640000n },
-        { instrumentId: "NSE:RELIANCE", pricePaise: 144300, openPaise: 140500, highPaise: 144800, lowPaise: 140000, cumulativeVolume: 3190000n, expectedCumulativeVolume: 2800000n },
+        { instrumentId: "NSE:TCS", pricePaise: 321800, openPaise: 319500, highPaise: 322000, lowPaise: 319000, cumulativeVolume: 1780000n, expectedCumulativeVolume: 1720000n, expectedStepMoveBps: 35 },
+        { instrumentId: "NSE:HDFCBANK", pricePaise: 155800, openPaise: 159200, highPaise: 159500, lowPaise: 155500, cumulativeVolume: 2650000n, expectedCumulativeVolume: 2480000n, expectedStepMoveBps: 40 },
+        { instrumentId: "NSE:TATAMOTORS", pricePaise: 100700, openPaise: 99000, highPaise: 100900, lowPaise: 98800, cumulativeVolume: 3610000n, expectedCumulativeVolume: 3300000n, expectedStepMoveBps: 45 },
+        { instrumentId: "NSE:INDIGO", pricePaise: 518400, openPaise: 516000, highPaise: 519500, lowPaise: 515500, cumulativeVolume: 675000n, expectedCumulativeVolume: 640000n, expectedStepMoveBps: 30 },
+        { instrumentId: "NSE:RELIANCE", pricePaise: 144300, openPaise: 140500, highPaise: 144800, lowPaise: 140000, cumulativeVolume: 3190000n, expectedCumulativeVolume: 2800000n, expectedStepMoveBps: 80 },
       ],
     },
   ] satisfies ReplayStep[],

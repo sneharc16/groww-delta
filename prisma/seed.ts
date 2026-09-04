@@ -92,6 +92,7 @@ async function main() {
         structuredPayload: intent.structuredPayload as Prisma.InputJsonValue,
         status: "ACTIVE",
         version: 1,
+        effectiveFromSequence: 0,
       },
     });
   }
@@ -109,6 +110,7 @@ async function main() {
           lowPaise: snapshot.lowPaise,
           cumulativeVolume: snapshot.cumulativeVolume,
           expectedCumulativeVolume: snapshot.expectedCumulativeVolume,
+          expectedStepMoveBps: snapshot.expectedStepMoveBps,
           source: "ReplayMarketProvider",
           quality: "FRESH",
         },
@@ -123,6 +125,7 @@ async function main() {
           lowPaise: snapshot.lowPaise,
           cumulativeVolume: snapshot.cumulativeVolume,
           expectedCumulativeVolume: snapshot.expectedCumulativeVolume,
+          expectedStepMoveBps: snapshot.expectedStepMoveBps,
           source: "ReplayMarketProvider",
           quality: "FRESH",
         },

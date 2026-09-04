@@ -4,9 +4,11 @@ import type { WatchIntentDto, WatchlistItemDto } from "@/server/dto/types";
 import { PROVENANCE_LABELS } from "@/lib/constants";
 import { summarizeIntent } from "@/domain/intent/summary";
 import { Price } from "@/components/market/price";
+import type { AttentionLane } from "@/domain/attention/types";
 
-export function WatchlistRow({ item, onEdit, onAddReason, onRemove }: {
+export function WatchlistRow({ item, attentionLane, onEdit, onAddReason, onRemove }: {
   item: WatchlistItemDto;
+  attentionLane: AttentionLane;
   onEdit: (item: WatchlistItemDto, intent: WatchIntentDto) => void;
   onAddReason: (item: WatchlistItemDto) => void;
   onRemove: (item: WatchlistItemDto) => void;
@@ -14,7 +16,7 @@ export function WatchlistRow({ item, onEdit, onAddReason, onRemove }: {
   return (
     <article className="watchlist-row" data-testid={`watchlist-${item.instrument.symbol}`}>
       <Link href={`/stock/${item.instrument.symbol}`} className="instrument-cell" aria-label={`Open ${item.instrument.name}`}>
-        <strong>{item.instrument.symbol}</strong>
+        <span className="instrument-status-line"><strong>{item.instrument.symbol}</strong><span className={`watch-status watch-status-${attentionLane.toLowerCase()}`}>{attentionLane === "QUIET" ? "CAUGHT UP" : "NEW"}</span></span>
         <span>{item.instrument.name}</span>
       </Link>
       <div className="market-cell">

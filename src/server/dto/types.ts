@@ -1,5 +1,7 @@
 import type { IntentStatus, IntentType, ProvenanceSource } from "@/domain/intent/types";
 import type { MarketEventType, MarketQuality } from "@/domain/market/types";
+import type { AttentionLane, AttentionDisplay, IntentMatch } from "@/domain/attention/types";
+import type { AttentionReasonCode } from "@/domain/attention/reason-codes";
 
 export interface InstrumentDto {
   id: string;
@@ -21,6 +23,7 @@ export interface MarketSnapshotDto {
   lowPaise: number;
   cumulativeVolume: number;
   expectedCumulativeVolume: number | null;
+  expectedStepMoveBps: number | null;
   source: string;
   quality: MarketQuality;
   dayChangePercent: number;
@@ -37,6 +40,7 @@ export interface WatchIntentDto {
   provenanceReference: string | null;
   status: IntentStatus;
   version: number;
+  effectiveFromSequence: number;
   supersedesId: string | null;
   horizon: string | null;
   expiresAt: string | null;
@@ -78,4 +82,65 @@ export interface MarketEventDto {
   quality: MarketQuality;
   payload: unknown;
   correctionOfId: string | null;
+}
+
+export interface KnowledgeCursorDto {
+  id: string;
+  instrumentId: string;
+  lastSeenSequence: number;
+  lastSeenEventTime: string | null;
+  lastObservedSnapshotId: string | null;
+  cursorVersion: number;
+}
+
+export interface AttentionItemDto {
+  instrument: InstrumentDto;
+  fromSequence: number;
+  toSequence: number;
+  fromTime: string;
+  toTime: string;
+  baselineSnapshot: MarketSnapshotDto;
+  currentSnapshot: MarketSnapshotDto;
+  baselinePricePaise: number;
+  currentPricePaise: number;
+  priceDeltaPaise: number;
+  priceDeltaBps: number;
+  expectedWindowMoveBps: number | null;
+  priceSurprise: number | null;
+  volumeRatio: number | null;
+  priceSignificance: number;
+  volumeSignificance: number;
+  eventSignificance: number;
+  significance: number;
+  relevance: number;
+  novelty: number;
+  urgency: number;
+  confidence: number;
+  score: number;
+  lane: AttentionLane;
+  matchedIntents: IntentMatch[];
+  reasonCodes: AttentionReasonCode[];
+  eventSummaries: Array<{
+    id: string;
+    type: MarketEventType;
+    eventTime: string;
+    quality: MarketQuality;
+    payload: unknown;
+  }>;
+  display: AttentionDisplay;
+}
+
+export interface CatchUpDto {
+  asOfSequence: number;
+  asOfTime: string;
+  cursorSummary: {
+    allAtSameSequence: boolean;
+    minimumSequence: number;
+    maximumSequence: number;
+    commonLastSeenTime: string | null;
+  };
+  relevant: AttentionItemDto[];
+  significant: AttentionItemDto[];
+  quiet: AttentionItemDto[];
+  counts: { relevant: number; significant: number; quiet: number };
 }

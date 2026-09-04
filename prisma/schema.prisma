@@ -109,44 +109,45 @@ model WatchlistItem {
 }
 
 model WatchIntent {
-  id                  String           @id @default(cuid())
-  logicalIntentId     String
-  userId              String
-  instrumentId        String
-  type                IntentType
-  originalText        String?
-  structuredPayload   Json
-  provenanceSource    ProvenanceSource
-  provenanceReference String?
-  status              IntentStatus     @default(ACTIVE)
-  version             Int
-  supersedesId        String?          @unique
-  horizon             String?
-  expiresAt           DateTime?        @db.Timestamptz(3)
-  createdAt           DateTime         @default(now()) @db.Timestamptz(3)
-  updatedAt           DateTime         @updatedAt @db.Timestamptz(3)
-  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  instrument          Instrument       @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
-  supersedes          WatchIntent?     @relation("IntentVersions", fields: [supersedesId], references: [id], onDelete: Restrict)
-  supersededBy        WatchIntent?     @relation("IntentVersions")
+  id                    String           @id @default(cuid())
+  logicalIntentId       String
+  userId                String
+  instrumentId          String
+  type                  IntentType
+  originalText          String?
+  structuredPayload     Json
+  provenanceSource      ProvenanceSource
+  provenanceReference   String?
+  status                IntentStatus     @default(ACTIVE)
+  version               Int
+  effectiveFromSequence Int
+  supersedesId          String?          @unique
+  horizon               String?
+  expiresAt             DateTime?        @db.Timestamptz(3)
+  createdAt             DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime         @updatedAt @db.Timestamptz(3)
+  user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instrument            Instrument       @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
+  supersedes            WatchIntent?     @relation("IntentVersions", fields: [supersedesId], references: [id], onDelete: Restrict)
+  supersededBy          WatchIntent?     @relation("IntentVersions")
 
   @@unique([logicalIntentId, version])
   @@index([userId, instrumentId, status])
 }
 
 model KnowledgeCursor {
-  id                       String          @id @default(cuid())
-  userId                   String
-  instrumentId             String
-  lastSeenSequence         Int
-  lastSeenEventTime        DateTime?       @db.Timestamptz(3)
-  lastObservedSnapshotId   String?
-  cursorVersion            Int             @default(1)
-  createdAt                DateTime        @default(now()) @db.Timestamptz(3)
-  updatedAt                DateTime        @updatedAt @db.Timestamptz(3)
-  user                     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  instrument               Instrument      @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
-  lastObservedSnapshot     MarketSnapshot? @relation(fields: [lastObservedSnapshotId], references: [id], onDelete: SetNull)
+  id                     String          @id @default(cuid())
+  userId                 String
+  instrumentId           String
+  lastSeenSequence       Int
+  lastSeenEventTime      DateTime?       @db.Timestamptz(3)
+  lastObservedSnapshotId String?
+  cursorVersion          Int             @default(1)
+  createdAt              DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime        @updatedAt @db.Timestamptz(3)
+  user                   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instrument             Instrument      @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
+  lastObservedSnapshot   MarketSnapshot? @relation(fields: [lastObservedSnapshotId], references: [id], onDelete: SetNull)
 
   @@unique([userId, instrumentId])
 }
@@ -162,6 +163,7 @@ model MarketSnapshot {
   lowPaise                 Int
   cumulativeVolume         BigInt
   expectedCumulativeVolume BigInt?
+  expectedStepMoveBps      Int?
   source                   String
   quality                  MarketQuality
   createdAt                DateTime          @default(now()) @db.Timestamptz(3)

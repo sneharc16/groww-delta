@@ -16,6 +16,7 @@ export interface WatchIntentRecord {
   provenanceReference: string | null;
   status: IntentStatus;
   version: number;
+  effectiveFromSequence: number;
   supersedesId: string | null;
   horizon: string | null;
   expiresAt: Date | null;

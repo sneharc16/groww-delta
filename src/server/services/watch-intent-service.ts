@@ -4,6 +4,7 @@ import { watchIntentInputSchema, type WatchIntentInput } from "@/domain/intent/s
 import type { WatchIntentDraft } from "@/domain/intent/types";
 import { AppError } from "@/lib/errors/app-error";
 import { toIntentDto } from "@/server/dto/mappers";
+import type { MarketDataProvider } from "@/server/market/providers/market-data-provider";
 
 function toDraft(value: WatchIntentInput): WatchIntentDraft {
   return {
@@ -21,6 +22,7 @@ export class WatchIntentService {
   constructor(
     private readonly intents: WatchIntentRepository,
     private readonly instruments: InstrumentRepository,
+    private readonly market: MarketDataProvider,
   ) {}
 
   async list(userId: string, instrumentId: string) {
@@ -33,12 +35,14 @@ export class WatchIntentService {
       throw new AppError("INSTRUMENT_NOT_FOUND", "The selected instrument does not exist.", 404);
     }
     const logicalIntentId = randomUUID();
+    const effectiveFromSequence = await this.market.getCurrentSequence();
     const created = await this.intents.create({
       id: randomUUID(),
       logicalIntentId,
       userId,
       instrumentId,
       version: 1,
+      effectiveFromSequence,
       supersedesId: null,
       ...toDraft(input),
     });
@@ -49,12 +53,14 @@ export class WatchIntentService {
     const input = watchIntentInputSchema.parse(untrustedInput);
     const current = await this.intents.findCurrent(userId, logicalIntentId);
     if (!current) throw new AppError("WATCH_INTENT_NOT_FOUND", "No active watch reason was found.", 404);
+    const effectiveFromSequence = await this.market.getCurrentSequence();
     const next = await this.intents.supersedeAndCreate(current.id, {
       id: randomUUID(),
       logicalIntentId,
       userId,
       instrumentId: current.instrumentId,
       version: current.version + 1,
+      effectiveFromSequence,
       supersedesId: current.id,
       ...toDraft(input),
     });

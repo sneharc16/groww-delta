@@ -1,48 +1,52 @@
-import { defaultReplayScenario } from "../../../data/replay/default-scenario";
-import { DEFAULT_DEMO_SESSION_ID } from "@/lib/constants";
 import { AppError } from "@/lib/errors/app-error";
-import type { DemoSessionRepository } from "@/server/repositories/contracts";
-import type { DemoStateRecord } from "@/domain/market/types";
+import type { KnowledgeCursorRepository, WatchlistRepository } from "@/server/repositories/contracts";
+import type { MarketDataProvider } from "@/server/market/providers/market-data-provider";
+import type { DemoMarketController, DemoMarketState } from "@/server/market/providers/demo-market-controller";
 import type { DemoStateDto } from "@/server/dto/types";
 
 export class DemoMarketService {
-  constructor(private readonly sessions: DemoSessionRepository) {}
+  constructor(
+    private readonly controller: DemoMarketController,
+    private readonly watchlists: WatchlistRepository,
+    private readonly cursors: KnowledgeCursorRepository,
+    private readonly market: MarketDataProvider,
+  ) {}
 
-  private toDto(state: DemoStateRecord): DemoStateDto {
+  private toDto(state: DemoMarketState): DemoStateDto {
     return {
-      scenario: {
-        id: defaultReplayScenario.id,
-        name: defaultReplayScenario.name,
-        totalSteps: defaultReplayScenario.steps.length - 1,
-        timezone: defaultReplayScenario.timezone,
-      },
-      currentStep: state.currentStep,
-      currentSequence: state.currentSequence,
-      currentTime: state.currentTime.toISOString(),
-      atFinalStep: state.currentStep >= defaultReplayScenario.steps.length - 1,
+      scenario: state.scenario,
+      currentStep: state.position.currentStep,
+      currentSequence: state.position.currentSequence,
+      currentTime: state.position.currentTime.toISOString(),
+      atFinalStep: state.atFinalStep,
     };
   }
 
   async getState() {
-    const state = await this.sessions.getById(DEFAULT_DEMO_SESSION_ID);
+    const state = await this.controller.getDemoState();
     if (!state) throw new AppError("DEMO_SESSION_NOT_FOUND", "The default demo session has not been seeded.", 404);
     return this.toDto(state);
   }
 
   async advance(): Promise<DemoStateDto & { advanced: boolean; message?: string }> {
-    const state = await this.sessions.getById(DEFAULT_DEMO_SESSION_ID);
+    const state = await this.controller.advanceDemo();
     if (!state) throw new AppError("DEMO_SESSION_NOT_FOUND", "The default demo session has not been seeded.", 404);
-    if (state.currentStep >= defaultReplayScenario.steps.length - 1) {
-      return { ...this.toDto(state), advanced: false, message: "The demo market is already at the final step." };
-    }
-    const next = defaultReplayScenario.steps[state.currentStep + 1];
-    const updated = await this.sessions.setPosition(DEFAULT_DEMO_SESSION_ID, next.step, next.sequence, new Date(next.eventTime));
-    return { ...this.toDto(updated), advanced: true };
+    return { ...this.toDto(state), advanced: state.advanced, ...(state.message ? { message: state.message } : {}) };
   }
 
-  async reset() {
-    const initial = defaultReplayScenario.steps[0];
-    const updated = await this.sessions.setPosition(DEFAULT_DEMO_SESSION_ID, initial.step, initial.sequence, new Date(initial.eventTime));
-    return { ...this.toDto(updated), reset: true };
+  async reset(userId: string) {
+    const resetState = await this.controller.resetDemo();
+    const watchlist = await this.watchlists.getDefaultForUser(userId);
+    if (!watchlist) throw new AppError("WATCHLIST_NOT_FOUND", "The default watchlist has not been seeded.", 404);
+    const instrumentIds = watchlist.items.map((item) => item.instrumentId);
+    const snapshots = await this.market.getSnapshotsAtOrBefore(instrumentIds, resetState.position.currentSequence);
+    if (snapshots.length !== instrumentIds.length) throw new AppError("INVALID_MARKET_STATE", "Initial replay snapshots are incomplete.", 409);
+    await this.cursors.resetMany(userId, snapshots.map((snapshot) => ({
+      instrumentId: snapshot.instrumentId,
+      sequence: resetState.position.currentSequence,
+      eventTime: snapshot.eventTime,
+      snapshotId: snapshot.id,
+    })));
+    return { ...this.toDto(resetState), reset: true };
   }
 }

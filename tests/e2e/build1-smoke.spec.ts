@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test("watch reason versioning and deterministic replay smoke flow", async ({ page }) => {
+  await page.request.post("/api/demo/reset");
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Catch Up" })).toBeVisible();
 

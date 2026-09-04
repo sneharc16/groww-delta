@@ -22,14 +22,17 @@ A WatchIntent records why a user follows an instrument. One instrument can have 
 - provenance source/reference;
 - status, horizon, optional expiry, and timestamps;
 - a monotonically increasing version and `supersedesId` link.
+- `effectiveFromSequence`, the market sequence at which that version began applying.
 
 Editing never overwrites the active row. In one transaction, the old version becomes `SUPERSEDED` and a new `ACTIVE` row is created with the same logical ID, the next version, and a link to its predecessor. Archiving changes only the current active version to `ARCHIVED`. Historical intent rows remain inspectable.
+
+New and edited versions take the current market sequence as their effective sequence. Intent matching starts after the later of this sequence and the user's cursor, preventing a newly added reason from reinterpreting older market events. When the demo clock intentionally rewinds, analysis clamps a future effective sequence to the current replay sequence; this is replay time-travel behavior, not a production-market rule.
 
 Supported types are `PRICE_LEVEL`, `EARNINGS`, `DIVIDEND`, `TECHNICAL`, `COMPANY_EVENT`, `DRIVER`, `LONG_TERM`, and `GENERAL`. Their payloads are discriminated and validated in `src/domain/intent/schemas.ts`.
 
 ## MarketSnapshot
 
-A point-in-time observation for one instrument and replay sequence. All money uses integer paise. It stores price, OHLC, cumulative/expected cumulative volume, event time, source, and quality. `(instrumentId, sequence)` is unique.
+A point-in-time observation for one instrument and replay sequence. All money uses integer paise. It stores price, OHLC, cumulative/expected cumulative volume, simulated expected one-step movement in basis points, event time, source, and quality. `(instrumentId, sequence)` is unique. Expected movement is fixture metadata used to normalize price changes over a multi-step window with `sqrt(sum(stepMove²))`; it is not real volatility data.
 
 ## MarketEvent
 
@@ -37,8 +40,14 @@ An immutable conceptual fact assigned to a deterministic sequence, with optional
 
 ## KnowledgeCursor
 
-The persisted baseline for one user/instrument pair: last seen sequence/event time, last observed snapshot, and cursor schema version. Build 1 seeds each cursor at Step 0 and does not advance cursors when pages are viewed.
+The persisted knowledge baseline for one user/instrument pair: last seen sequence/event time, last observed snapshot, and cursor version. Reads never move it. Only explicit acknowledgement advances it, and the database update is monotonic. Individual acknowledgement can leave instruments at different baselines. Adding or re-adding a watchlist instrument starts its cursor at the current market sequence. Demo reset returns active instruments to the Step 0 baseline.
 
 ## DemoSession
 
 Stores the active replay scenario, step, sequence, and simulated time. It is persisted independently of browser state, so refreshing does not reset the replay. Advance and reset update this row through `DemoMarketService`.
+
+## AttentionItem
+
+A Build 2 AttentionItem is derived, not persisted. It aggregates at most one consumer card per active instrument for the window after that instrument's Knowledge Cursor through the current market sequence. It contains baseline/current state, price and volume measurements, material events, direct intent matches, reason codes, confidence, internal score, and a `RELEVANT`, `SIGNIFICANT`, or `QUIET` lane.
+
+Relevance and significance are intentionally separate. Relevance is 100 only for a direct structured intent match. Objective significance combines price surprise, relative volume, and deterministic event severity. Acknowledgement changes the cursor window, so already-known information falls out naturally without deleting market facts.

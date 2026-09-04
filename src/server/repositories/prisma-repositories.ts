@@ -6,6 +6,7 @@ import type {
   InstrumentRepository,
   MarketEventRepository,
   MarketSnapshotRepository,
+  KnowledgeCursorRepository,
   WatchIntentRepository,
   WatchlistRepository,
 } from "./contracts";
@@ -83,6 +84,13 @@ export class PrismaWatchIntentRepository implements WatchIntentRepository {
     });
   }
 
+  listActiveForInstruments(userId: string, instrumentIds: string[]) {
+    return prisma.watchIntent.findMany({
+      where: { userId, instrumentId: { in: instrumentIds }, status: "ACTIVE" },
+      orderBy: [{ instrumentId: "asc" }, { logicalIntentId: "asc" }],
+    });
+  }
+
   findCurrent(userId: string, logicalIntentId: string) {
     return prisma.watchIntent.findFirst({
       where: { userId, logicalIntentId, status: "ACTIVE" },
@@ -139,6 +147,14 @@ export class PrismaMarketSnapshotRepository implements MarketSnapshotRepository 
   listThroughSequence(instrumentId: string, currentSequence: number) {
     return prisma.marketSnapshot.findMany({ where: { instrumentId, sequence: { lte: currentSequence } }, orderBy: { sequence: "asc" } });
   }
+
+  listForInstrumentsThrough(instrumentIds: string[], currentSequence: number) {
+    if (instrumentIds.length === 0) return Promise.resolve([]);
+    return prisma.marketSnapshot.findMany({
+      where: { instrumentId: { in: instrumentIds }, sequence: { lte: currentSequence } },
+      orderBy: [{ instrumentId: "asc" }, { sequence: "asc" }],
+    });
+  }
 }
 
 export class PrismaMarketEventRepository implements MarketEventRepository {
@@ -147,5 +163,68 @@ export class PrismaMarketEventRepository implements MarketEventRepository {
       where: { sequence: { gt: exclusiveStart, lte: inclusiveEnd } },
       orderBy: [{ sequence: "asc" }, { eventTime: "asc" }, { id: "asc" }],
     });
+  }
+}
+
+export class PrismaKnowledgeCursorRepository implements KnowledgeCursorRepository {
+  listForInstruments(userId: string, instrumentIds: string[]) {
+    if (instrumentIds.length === 0) return Promise.resolve([]);
+    return prisma.knowledgeCursor.findMany({
+      where: { userId, instrumentId: { in: instrumentIds } },
+      orderBy: { instrumentId: "asc" },
+    });
+  }
+
+  setBaseline(userId: string, input: Parameters<KnowledgeCursorRepository["setBaseline"]>[1]) {
+    return prisma.knowledgeCursor.upsert({
+      where: { userId_instrumentId: { userId, instrumentId: input.instrumentId } },
+      update: {
+        lastSeenSequence: input.sequence,
+        lastSeenEventTime: input.eventTime,
+        lastObservedSnapshotId: input.snapshotId,
+        cursorVersion: { increment: 1 },
+      },
+      create: {
+        userId,
+        instrumentId: input.instrumentId,
+        lastSeenSequence: input.sequence,
+        lastSeenEventTime: input.eventTime,
+        lastObservedSnapshotId: input.snapshotId,
+        cursorVersion: 1,
+      },
+    });
+  }
+
+  async advanceMonotonic(userId: string, input: Parameters<KnowledgeCursorRepository["advanceMonotonic"]>[1]) {
+    await prisma.knowledgeCursor.updateMany({
+      where: { userId, instrumentId: input.instrumentId, lastSeenSequence: { lt: input.sequence } },
+      data: {
+        lastSeenSequence: input.sequence,
+        lastSeenEventTime: input.eventTime,
+        lastObservedSnapshotId: input.snapshotId,
+        cursorVersion: { increment: 1 },
+      },
+    });
+    return prisma.knowledgeCursor.findUnique({ where: { userId_instrumentId: { userId, instrumentId: input.instrumentId } } });
+  }
+
+  resetMany(userId: string, inputs: Parameters<KnowledgeCursorRepository["resetMany"]>[1]) {
+    return prisma.$transaction(inputs.map((input) => prisma.knowledgeCursor.upsert({
+      where: { userId_instrumentId: { userId, instrumentId: input.instrumentId } },
+      update: {
+        lastSeenSequence: input.sequence,
+        lastSeenEventTime: input.eventTime,
+        lastObservedSnapshotId: input.snapshotId,
+        cursorVersion: { increment: 1 },
+      },
+      create: {
+        userId,
+        instrumentId: input.instrumentId,
+        lastSeenSequence: input.sequence,
+        lastSeenEventTime: input.eventTime,
+        lastObservedSnapshotId: input.snapshotId,
+        cursorVersion: 1,
+      },
+    })));
   }
 }

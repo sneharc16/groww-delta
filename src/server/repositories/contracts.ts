@@ -1,5 +1,5 @@
 import type { InstrumentRecord } from "@/domain/instrument/types";
-import type { DemoStateRecord, MarketEventRecord, MarketSnapshotRecord } from "@/domain/market/types";
+import type { DemoStateRecord, KnowledgeCursorRecord, MarketEventRecord, MarketSnapshotRecord } from "@/domain/market/types";
 import type { WatchIntentDraft, WatchIntentRecord } from "@/domain/intent/types";
 
 export interface WatchlistItemRecord {
@@ -40,11 +40,13 @@ export interface CreateIntentRecordInput extends WatchIntentDraft {
   userId: string;
   instrumentId: string;
   version: number;
+  effectiveFromSequence: number;
   supersedesId: string | null;
 }
 
 export interface WatchIntentRepository {
   listForInstrument(userId: string, instrumentId: string): Promise<WatchIntentRecord[]>;
+  listActiveForInstruments(userId: string, instrumentIds: string[]): Promise<WatchIntentRecord[]>;
   findCurrent(userId: string, logicalIntentId: string): Promise<WatchIntentRecord | null>;
   create(input: CreateIntentRecordInput): Promise<WatchIntentRecord>;
   supersedeAndCreate(previousId: string, input: CreateIntentRecordInput): Promise<WatchIntentRecord>;
@@ -60,8 +62,23 @@ export interface MarketSnapshotRepository {
   findCurrent(instrumentId: string, currentSequence: number): Promise<MarketSnapshotRecord | null>;
   findCurrentMany(instrumentIds: string[], currentSequence: number): Promise<MarketSnapshotRecord[]>;
   listThroughSequence(instrumentId: string, currentSequence: number): Promise<MarketSnapshotRecord[]>;
+  listForInstrumentsThrough(instrumentIds: string[], currentSequence: number): Promise<MarketSnapshotRecord[]>;
 }
 
 export interface MarketEventRepository {
   listBetweenSequences(exclusiveStart: number, inclusiveEnd: number): Promise<MarketEventRecord[]>;
+}
+
+export interface CursorBaselineInput {
+  instrumentId: string;
+  sequence: number;
+  eventTime: Date;
+  snapshotId: string;
+}
+
+export interface KnowledgeCursorRepository {
+  listForInstruments(userId: string, instrumentIds: string[]): Promise<KnowledgeCursorRecord[]>;
+  setBaseline(userId: string, input: CursorBaselineInput): Promise<KnowledgeCursorRecord>;
+  advanceMonotonic(userId: string, input: CursorBaselineInput): Promise<KnowledgeCursorRecord | null>;
+  resetMany(userId: string, inputs: CursorBaselineInput[]): Promise<KnowledgeCursorRecord[]>;
 }
