@@ -1,6 +1,7 @@
 import type { InstrumentRecord } from "@/domain/instrument/types";
-import type { DemoStateRecord, KnowledgeCursorRecord, MarketEventRecord, MarketSnapshotRecord } from "@/domain/market/types";
+import type { DemoStateRecord, KnowledgeAcknowledgementRecord, KnowledgeCursorRecord, MarketEventRecord, MarketSnapshotRecord } from "@/domain/market/types";
 import type { WatchIntentDraft, WatchIntentRecord } from "@/domain/intent/types";
+import type { GraphEdgeDraft, GraphNodeDraft, GraphProvenance, WatchGraphRecord } from "@/domain/graph/types";
 
 export interface WatchlistItemRecord {
   id: string;
@@ -48,9 +49,13 @@ export interface WatchIntentRepository {
   listForInstrument(userId: string, instrumentId: string): Promise<WatchIntentRecord[]>;
   listActiveForInstruments(userId: string, instrumentIds: string[]): Promise<WatchIntentRecord[]>;
   findCurrent(userId: string, logicalIntentId: string): Promise<WatchIntentRecord | null>;
+  findLatest(userId: string, logicalIntentId: string): Promise<WatchIntentRecord | null>;
   create(input: CreateIntentRecordInput): Promise<WatchIntentRecord>;
   supersedeAndCreate(previousId: string, input: CreateIntentRecordInput): Promise<WatchIntentRecord>;
   archiveCurrent(id: string): Promise<WatchIntentRecord>;
+  resolveCurrent(id: string, resolvedAt: Date, resolvedAtSequence: number): Promise<WatchIntentRecord>;
+  keepWatching(id: string, throughSequence: number): Promise<WatchIntentRecord>;
+  renew(previousId: string, input: CreateIntentRecordInput): Promise<WatchIntentRecord>;
 }
 
 export interface DemoSessionRepository {
@@ -81,4 +86,39 @@ export interface KnowledgeCursorRepository {
   setBaseline(userId: string, input: CursorBaselineInput): Promise<KnowledgeCursorRecord>;
   advanceMonotonic(userId: string, input: CursorBaselineInput): Promise<KnowledgeCursorRecord | null>;
   resetMany(userId: string, inputs: CursorBaselineInput[]): Promise<KnowledgeCursorRecord[]>;
+}
+
+export interface KnowledgeAcknowledgementRepository {
+  create(input: {
+    userId: string;
+    instrumentId: string;
+    fromSequence: number;
+    throughSequence: number;
+    scope: "INSTRUMENT" | "WATCHLIST";
+    acknowledgedAt: Date;
+  }): Promise<KnowledgeAcknowledgementRecord>;
+  listForInstrument(userId: string, instrumentId: string): Promise<KnowledgeAcknowledgementRecord[]>;
+}
+
+export interface CreateWatchGraphInput {
+  id: string;
+  logicalGraphId: string;
+  userId: string;
+  instrumentId: string;
+  watchIntentLogicalId: string;
+  version: number;
+  provenance: GraphProvenance;
+  templateKey: string | null;
+  effectiveFromSequence: number;
+  supersedesId: string | null;
+  nodes: Array<GraphNodeDraft & { id: string }>;
+  edges: Array<GraphEdgeDraft & { id: string; fromNodeId: string; toNodeId: string }>;
+}
+
+export interface WatchGraphRepository {
+  listActiveForIntentLogicalIds(userId: string, logicalIntentIds: string[]): Promise<WatchGraphRecord[]>;
+  listForIntent(userId: string, logicalIntentId: string): Promise<WatchGraphRecord[]>;
+  findActive(userId: string, logicalIntentId: string): Promise<WatchGraphRecord | null>;
+  createVersion(previousId: string | null, input: CreateWatchGraphInput): Promise<WatchGraphRecord>;
+  archiveActiveForIntent(userId: string, logicalIntentId: string): Promise<number>;
 }

@@ -1,4 +1,4 @@
-import type { MarketEventType } from "../../src/domain/market/types";
+import type { EventSubjectType, MarketEventType } from "../../src/domain/market/types";
 
 export interface ReplayInstrument {
   id: string;
@@ -32,6 +32,9 @@ export interface ReplayEventFixture {
   instrumentId: string | null;
   type: MarketEventType;
   eventTime: string;
+  subjectType: EventSubjectType;
+  subjectKey: string;
+  tags: string[];
   payload: Record<string, unknown>;
 }
 
@@ -96,6 +99,18 @@ export const defaultReplayScenario = {
         { instrumentId: "NSE:RELIANCE", pricePaise: 144300, openPaise: 140500, highPaise: 144800, lowPaise: 140000, cumulativeVolume: 3190000n, expectedCumulativeVolume: 2800000n, expectedStepMoveBps: 80 },
       ],
     },
+    {
+      step: 4,
+      sequence: 4,
+      eventTime: "2025-08-14T12:00:00+05:30",
+      snapshots: [
+        { instrumentId: "NSE:TCS", pricePaise: 322000, openPaise: 319500, highPaise: 322200, lowPaise: 319000, cumulativeVolume: 2160000n, expectedCumulativeVolume: 2100000n, expectedStepMoveBps: 35 },
+        { instrumentId: "NSE:HDFCBANK", pricePaise: 155600, openPaise: 159200, highPaise: 159500, lowPaise: 155300, cumulativeVolume: 3190000n, expectedCumulativeVolume: 3050000n, expectedStepMoveBps: 40 },
+        { instrumentId: "NSE:TATAMOTORS", pricePaise: 100800, openPaise: 99000, highPaise: 101000, lowPaise: 98800, cumulativeVolume: 4230000n, expectedCumulativeVolume: 4020000n, expectedStepMoveBps: 45 },
+        { instrumentId: "NSE:INDIGO", pricePaise: 518600, openPaise: 516000, highPaise: 519500, lowPaise: 515500, cumulativeVolume: 820000n, expectedCumulativeVolume: 790000n, expectedStepMoveBps: 30 },
+        { instrumentId: "NSE:RELIANCE", pricePaise: 144500, openPaise: 140500, highPaise: 144900, lowPaise: 140000, cumulativeVolume: 3760000n, expectedCumulativeVolume: 3500000n, expectedStepMoveBps: 80 },
+      ],
+    },
   ] satisfies ReplayStep[],
   events: [
     {
@@ -104,6 +119,9 @@ export const defaultReplayScenario = {
       instrumentId: "NSE:TCS",
       type: "RESULTS_PUBLISHED",
       eventTime: "2025-08-14T10:58:00+05:30",
+      subjectType: "EVENT_CATEGORY",
+      subjectKey: "EARNINGS",
+      tags: ["EARNINGS", "MARGINS", "Q2"],
       payload: { quarterLabel: "Q2", headline: "Quarterly results published", focus: ["MARGINS"] },
     },
     {
@@ -112,6 +130,9 @@ export const defaultReplayScenario = {
       instrumentId: "NSE:TATAMOTORS",
       type: "TECHNICAL_TRANSITION",
       eventTime: "2025-08-14T10:59:00+05:30",
+      subjectType: "METRIC",
+      subjectKey: "TECHNICAL_BREAKOUT",
+      tags: ["BREAKOUT", "TECHNICAL"],
       payload: { setup: "BREAKOUT", referenceLevelPaise: 100000, direction: "CROSSED_ABOVE" },
     },
     {
@@ -120,7 +141,21 @@ export const defaultReplayScenario = {
       instrumentId: "NSE:INDIGO",
       type: "EXTERNAL_DRIVER",
       eventTime: "2025-08-14T10:57:00+05:30",
+      subjectType: "EXTERNAL_DRIVER",
+      subjectKey: "FUEL_COST",
+      tags: ["FUEL_COST", "CRUDE", "AIRLINE_INPUT_COST"],
       payload: { driverKey: "FUEL_COST", externalMetric: "CRUDE", direction: "UP", magnitude: "MATERIAL" },
+    },
+    {
+      id: "event:4:external:crude",
+      sequence: 4,
+      instrumentId: null,
+      type: "EXTERNAL_DRIVER",
+      eventTime: "2025-08-14T11:58:00+05:30",
+      subjectType: "EXTERNAL_DRIVER",
+      subjectKey: "CRUDE",
+      tags: ["CRUDE", "FUEL_COST"],
+      payload: { externalMetric: "CRUDE", direction: "UP", magnitude: "MATERIAL" },
     },
   ] satisfies ReplayEventFixture[],
 } as const;

@@ -1,6 +1,7 @@
 import type { InstrumentRecord } from "@/domain/instrument/types";
 import type { WatchIntentRecord } from "@/domain/intent/types";
-import type { DemoStateRecord, KnowledgeCursorRecord, MarketEventRecord, MarketSnapshotRecord } from "@/domain/market/types";
+import type { DemoStateRecord, KnowledgeAcknowledgementRecord, KnowledgeCursorRecord, MarketEventRecord, MarketSnapshotRecord } from "@/domain/market/types";
+import type { WatchGraphDraft, WatchGraphRecord } from "@/domain/graph/types";
 import type {
   CreateIntentRecordInput,
   DemoSessionRepository,
@@ -13,6 +14,9 @@ import type {
   WatchlistRepository,
   KnowledgeCursorRepository,
   CursorBaselineInput,
+  CreateWatchGraphInput,
+  KnowledgeAcknowledgementRepository,
+  WatchGraphRepository,
 } from "@/server/repositories/contracts";
 
 export const testInstrument: InstrumentRecord = {
@@ -25,7 +29,8 @@ export function intentRecord(input: Partial<WatchIntentRecord> = {}): WatchInten
     id: "version-1", logicalIntentId: "logical-1", userId: "demo-user", instrumentId: "NSE:TCS", type: "EARNINGS",
     originalText: "Watching Q2 margins", structuredPayload: { focus: ["MARGINS"], quarterLabel: "Q2" },
     provenanceSource: "RESULTS_CALENDAR", provenanceReference: null, status: "ACTIVE", version: 1, supersedesId: null,
-    effectiveFromSequence: 0, horizon: null, expiresAt: null, createdAt: now, updatedAt: now, ...input,
+    effectiveFromSequence: 0, resolvedAt: null, resolvedAtSequence: null, lifecycleReviewedThroughSequence: null,
+    horizon: null, expiresAt: null, createdAt: now, updatedAt: now, ...input,
   };
 }
 
@@ -40,6 +45,7 @@ export class MemoryIntentRepository implements WatchIntentRepository {
   async listForInstrument(userId: string, instrumentId: string) { return this.rows.filter((row) => row.userId === userId && row.instrumentId === instrumentId); }
   async listActiveForInstruments(userId: string, instrumentIds: string[]) { return this.rows.filter((row) => row.userId === userId && instrumentIds.includes(row.instrumentId) && row.status === "ACTIVE"); }
   async findCurrent(userId: string, logicalIntentId: string) { return this.rows.find((row) => row.userId === userId && row.logicalIntentId === logicalIntentId && row.status === "ACTIVE") ?? null; }
+  async findLatest(userId: string, logicalIntentId: string) { return this.rows.filter((row) => row.userId === userId && row.logicalIntentId === logicalIntentId).sort((a, b) => b.version - a.version)[0] ?? null; }
   async create(input: CreateIntentRecordInput) {
     const row = intentRecord({ ...input, status: "ACTIVE", createdAt: new Date(), updatedAt: new Date() });
     this.rows.push(row); return row;
@@ -55,6 +61,17 @@ export class MemoryIntentRepository implements WatchIntentRepository {
     if (!row) throw new Error("missing intent");
     row.status = "ARCHIVED"; return row;
   }
+  async resolveCurrent(id: string, resolvedAt: Date, resolvedAtSequence: number) {
+    const row = this.rows.find((candidate) => candidate.id === id);
+    if (!row) throw new Error("missing intent");
+    Object.assign(row, { status: "RESOLVED" as const, resolvedAt, resolvedAtSequence, updatedAt: resolvedAt }); return row;
+  }
+  async keepWatching(id: string, throughSequence: number) {
+    const row = this.rows.find((candidate) => candidate.id === id);
+    if (!row) throw new Error("missing intent");
+    row.lifecycleReviewedThroughSequence = throughSequence; return row;
+  }
+  async renew(_previousId: string, input: CreateIntentRecordInput) { return this.create(input); }
 }
 
 export class MemoryDemoSessionRepository implements DemoSessionRepository {
@@ -118,7 +135,7 @@ export class MemoryKnowledgeCursorRepository implements KnowledgeCursorRepositor
   constructor(public rows: KnowledgeCursorRecord[] = []) {}
 
   async listForInstruments(userId: string, instrumentIds: string[]) {
-    return this.rows.filter((row) => row.userId === userId && instrumentIds.includes(row.instrumentId));
+    return this.rows.filter((row) => row.userId === userId && instrumentIds.includes(row.instrumentId)).map((row) => ({ ...row }));
   }
 
   async setBaseline(userId: string, input: CursorBaselineInput) {
@@ -144,4 +161,82 @@ export class MemoryKnowledgeCursorRepository implements KnowledgeCursorRepositor
   async resetMany(userId: string, inputs: CursorBaselineInput[]) {
     return Promise.all(inputs.map((input) => this.setBaseline(userId, input)));
   }
+}
+
+export class MemoryKnowledgeAcknowledgementRepository implements KnowledgeAcknowledgementRepository {
+  constructor(public rows: KnowledgeAcknowledgementRecord[] = []) {}
+  async create(input: Parameters<KnowledgeAcknowledgementRepository["create"]>[0]) {
+    const row: KnowledgeAcknowledgementRecord = { id: `ack-${this.rows.length + 1}`, ...input };
+    this.rows.push(row); return row;
+  }
+  async listForInstrument(userId: string, instrumentId: string) { return this.rows.filter((row) => row.userId === userId && row.instrumentId === instrumentId); }
+}
+
+export class MemoryWatchGraphRepository implements WatchGraphRepository {
+  constructor(public rows: WatchGraphRecord[] = []) {}
+  async listActiveForIntentLogicalIds(userId: string, ids: string[]) { return this.rows.filter((row) => row.userId === userId && ids.includes(row.watchIntentLogicalId) && row.status === "ACTIVE"); }
+  async listForIntent(userId: string, id: string) { return this.rows.filter((row) => row.userId === userId && row.watchIntentLogicalId === id).sort((a, b) => b.version - a.version); }
+  async findActive(userId: string, id: string) { return this.rows.find((row) => row.userId === userId && row.watchIntentLogicalId === id && row.status === "ACTIVE") ?? null; }
+  async createVersion(previousId: string | null, input: CreateWatchGraphInput) {
+    const previous = this.rows.find((row) => row.id === previousId);
+    if (previous?.status === "ACTIVE") previous.status = "SUPERSEDED";
+    const now = new Date();
+    const row: WatchGraphRecord = {
+      ...input,
+      status: "ACTIVE",
+      createdAt: now,
+      updatedAt: now,
+      nodes: input.nodes.map((node) => ({ ...node, graphId: input.id, metadata: node.metadata ?? {}, createdAt: now })),
+      edges: input.edges.map((edge) => ({ id: edge.id, graphId: input.id, fromNodeId: edge.fromNodeId, toNodeId: edge.toNodeId, relationship: edge.relationship, weight: edge.weight, createdAt: now })),
+    };
+    this.rows.push(row); return row;
+  }
+  async archiveActiveForIntent(userId: string, id: string) {
+    const active = this.rows.filter((row) => row.userId === userId && row.watchIntentLogicalId === id && row.status === "ACTIVE");
+    active.forEach((row) => { row.status = "ARCHIVED"; }); return active.length;
+  }
+}
+
+export function graphRecord(
+  draft: WatchGraphDraft,
+  input: Partial<Omit<WatchGraphRecord, "nodes" | "edges">> = {},
+): WatchGraphRecord {
+  const now = new Date("2025-08-14T04:30:00.000Z");
+  const id = input.id ?? "graph-version-1";
+  const nodes = draft.nodes.map((node, index) => ({
+    id: `${id}:node:${index}`,
+    graphId: id,
+    nodeKey: node.nodeKey,
+    type: node.type,
+    label: node.label,
+    metadata: node.metadata ?? {},
+    createdAt: now,
+  }));
+  const nodeIds = new Map(nodes.map((node) => [node.nodeKey, node.id]));
+  return {
+    id,
+    logicalGraphId: "logical-graph-1",
+    userId: "demo-user",
+    instrumentId: "NSE:INDIGO",
+    watchIntentLogicalId: "indigo-driver",
+    version: 1,
+    status: "ACTIVE",
+    provenance: "IMPORTED_DEMO",
+    templateKey: "AIRLINE_FUEL_COST",
+    effectiveFromSequence: 0,
+    supersedesId: null,
+    createdAt: now,
+    updatedAt: now,
+    nodes,
+    edges: draft.edges.map((edge, index) => ({
+      id: `${id}:edge:${index}`,
+      graphId: id,
+      fromNodeId: nodeIds.get(edge.fromKey) ?? edge.fromKey,
+      toNodeId: nodeIds.get(edge.toKey) ?? edge.toKey,
+      relationship: edge.relationship,
+      weight: edge.weight,
+      createdAt: now,
+    })),
+    ...input,
+  };
 }

@@ -3,7 +3,9 @@ import type { MarketEventRecord, MarketSnapshotRecord } from "@/domain/market/ty
 import type { WatchIntentRecord } from "@/domain/intent/types";
 import type { KnowledgeCursorRecord } from "@/domain/market/types";
 import type { AttentionItem } from "@/domain/attention/types";
-import type { AttentionItemDto, InstrumentDto, KnowledgeCursorDto, MarketEventDto, MarketSnapshotDto, WatchIntentDto } from "./types";
+import type { WatchGraphRecord } from "@/domain/graph/types";
+import type { IntentLifecycleResult } from "@/domain/intent/lifecycle";
+import type { AttentionItemDto, InstrumentDto, IntentLifecycleDto, KnowledgeCursorDto, MarketEventDto, MarketSnapshotDto, WatchGraphDto, WatchIntentDto } from "./types";
 
 export function toInstrumentDto(instrument: InstrumentRecord): InstrumentDto {
   return {
@@ -48,6 +50,9 @@ export function toIntentDto(intent: WatchIntentRecord): WatchIntentDto {
     status: intent.status,
     version: intent.version,
     effectiveFromSequence: intent.effectiveFromSequence,
+    resolvedAt: intent.resolvedAt?.toISOString() ?? null,
+    resolvedAtSequence: intent.resolvedAtSequence,
+    lifecycleReviewedThroughSequence: intent.lifecycleReviewedThroughSequence,
     supersedesId: intent.supersedesId,
     horizon: intent.horizon,
     expiresAt: intent.expiresAt?.toISOString() ?? null,
@@ -67,6 +72,9 @@ export function toEventDto(event: MarketEventRecord): MarketEventDto {
     source: event.source,
     quality: event.quality,
     payload: event.payload,
+    subjectType: event.subjectType,
+    subjectKey: event.subjectKey,
+    tags: event.tags,
     correctionOfId: event.correctionOfId,
   };
 }
@@ -108,9 +116,54 @@ export function toAttentionItemDto(item: AttentionItem): AttentionItemDto {
     confidence: item.confidence,
     score: item.score,
     lane: item.lane,
-    matchedIntents: item.matchedIntents,
+    matchedIntents: item.matchedIntents.map((match) => ({
+      ...match,
+      graphMatch: match.graphMatch ? {
+        matchType: match.graphMatch.matchType,
+        graphId: match.graphMatch.graphId,
+        graphVersion: match.graphMatch.graphVersion,
+        logicalIntentId: match.graphMatch.logicalIntentId,
+        eventId: match.graphMatch.eventId,
+        eventSubjectKey: match.graphMatch.eventSubjectKey,
+        matchedNodeKey: match.graphMatch.matchedNodeKey,
+        relevance: match.graphMatch.relevance,
+        pathDepth: match.graphMatch.pathDepth,
+        pathWeight: match.graphMatch.pathWeight,
+        effectiveSequence: match.graphMatch.effectiveSequence,
+        path: match.graphMatch.path,
+      } : null,
+    })),
+    relevancePaths: item.relevancePaths,
     reasonCodes: item.reasonCodes,
     eventSummaries: item.eventSummaries.map((event) => ({ ...event, eventTime: event.eventTime.toISOString() })),
     display: item.display,
   };
+}
+
+export function toWatchGraphDto(graph: WatchGraphRecord): WatchGraphDto {
+  const root = graph.nodes.find((node) => node.type === "INSTRUMENT");
+  if (!root) throw new Error("A graph DTO requires an instrument root.");
+  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
+  return {
+    id: graph.id,
+    logicalGraphId: graph.logicalGraphId,
+    watchIntentLogicalId: graph.watchIntentLogicalId,
+    version: graph.version,
+    status: graph.status,
+    provenance: graph.provenance,
+    templateKey: graph.templateKey,
+    effectiveFromSequence: graph.effectiveFromSequence,
+    root: { key: root.nodeKey, label: root.label, type: root.type },
+    relatedDrivers: graph.nodes.filter((node) => node.type !== "INSTRUMENT" && node.type !== "QUESTION").map((node) => ({ key: node.nodeKey, label: node.label, type: node.type })),
+    connections: graph.edges.flatMap((edge) => {
+      const from = nodeById.get(edge.fromNodeId);
+      const to = nodeById.get(edge.toNodeId);
+      return from && to ? [{ fromKey: from.nodeKey, toKey: to.nodeKey, label: "Configured relationship" }] : [];
+    }),
+    createdAt: graph.createdAt.toISOString(),
+  };
+}
+
+export function toIntentLifecycleDto(value: IntentLifecycleResult): IntentLifecycleDto {
+  return { ...value, triggerTime: value.triggerTime?.toISOString() ?? null };
 }

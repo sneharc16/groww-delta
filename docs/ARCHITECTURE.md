@@ -20,6 +20,10 @@ flowchart TD
   CatchUp --> Analyzer[AttentionAnalyzer]
   CatchUp --> Cursor[Knowledge Cursors]
   CatchUp --> Intents[Active Watch Intents]
+  Intents --> Graphs[Active Watch Graph Versions]
+  Events[Normalized Event Subjects and Tags] --> GraphMatch[Bounded Graph Relevance]
+  Graphs --> GraphMatch
+  GraphMatch --> Analyzer
   Analyzer --> Lanes[Relevant / Significant / Quiet]
   Lanes --> UI
   Fixture[Deterministic Replay Scenario] --> Seed[Idempotent Seed]
@@ -47,10 +51,12 @@ flowchart TD
 - `MarketQueryService`: watchlist snapshots and occurred-event queries
 - `InstrumentService`: available instrument queries
 - `CatchUpService`: side-effect-free analysis orchestration and explicit acknowledgement
+- `WatchGraphService`: curated suggestions plus immutable, market-effective graph versions
+- `IntentLifecycleService`: resolution, renewal, keep-watching review, and state-derived timeline queries
 
 ### Domain
 
-`src/domain` contains storage-independent types, discriminated Zod schemas, intent presentation summaries, and the Build 2 attention analyzer. The analyzer combines cursor windows, snapshots, events, and structured intent matches into derived per-instrument lanes. It has no Prisma, HTTP, React, or replay-fixture dependency.
+`src/domain` contains storage-independent rules. The attention analyzer combines cursor windows, snapshots, events, direct intent matches, and bounded Watch Graph matches into one derived item per instrument. Graph validation/traversal and intent lifecycle evaluation have no Prisma, HTTP, React, or replay-fixture dependency.
 
 ### Repositories
 
@@ -64,4 +70,6 @@ A future live provider belongs beside `ReplayMarketProvider` and would be select
 
 ## Persistence and concurrency
 
-PostgreSQL is the only source of product state. A partial unique index enforces one active `WatchlistItem` for each watchlist/instrument pair while allowing archived history and later re-addition. Intent versions have a unique `(logicalIntentId, version)` key, a self-reference to the previous row, and atomic version transitions. Attention items are not stored: they are reproducibly derived from persisted market facts, active intent versions, and cursor state.
+PostgreSQL is the only source of product state. A partial unique index enforces one active `WatchlistItem` for each watchlist/instrument pair while allowing archived history and later re-addition. Intent and Watch Graph versions keep immutable predecessor links. Graph nodes and edges are relational and loaded through repositories. `KnowledgeAcknowledgement` retains audit history while `KnowledgeCursor` remains current monotonic state. Attention items are not stored: they are reproducibly derived from market facts, active intent/graph versions, and cursor state.
+
+Graph traversal is bounded to three edges and 25 visited nodes. A normalized event subject is authoritative when present; tags provide fallback matching for events without a subject. This lets removal of a specifically tracked subject take effect without a broader context tag silently restoring it.

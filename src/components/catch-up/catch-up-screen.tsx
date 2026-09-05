@@ -42,6 +42,20 @@ export function CatchUpScreen() {
     finally { setBusy(null); }
   }
 
+  async function reviewAction(action: "resolve" | "keep" | "renew", logicalIntentId: string) {
+    setBusy(logicalIntentId); setMessage(null);
+    try {
+      if (action === "renew") await apiFetch(`/api/watch-intents/${logicalIntentId}/resolve`, { method: "POST" });
+      await apiFetch(`/api/watch-intents/${logicalIntentId}/${action}`, {
+        method: "POST",
+        ...(action === "renew" ? { body: JSON.stringify({}) } : {}),
+      });
+      await load();
+      setMessage(action === "resolve" ? "Watch reason resolved." : action === "renew" ? "Now watching the next cycle." : "Kept this watch reason active.");
+    } catch (caught: unknown) { setError(caught instanceof Error ? caught.message : "Could not update this watch reason."); }
+    finally { setBusy(null); }
+  }
+
   if (!data && !error) return <LoadingState label="Comparing with your last known market state…" />;
   if (error) return <ErrorState message={error} retry={() => void load()} />;
   if (!data) return null;
@@ -84,6 +98,20 @@ export function CatchUpScreen() {
         <section className="attention-section" aria-labelledby="significant-heading">
           <div className="lane-heading"><p className="eyebrow significant-eyebrow">Other significant changes</p><h2 id="significant-heading">Worth knowing, without a matched reason</h2></div>
           <div className="attention-grid">{data.significant.map((item) => <AttentionCard key={item.instrument.id} item={item} busy={busy !== null} onMarkSeen={(id) => void acknowledge({ instrumentIds: [id], throughSequence: data.asOfSequence }, id)} />)}</div>
+        </section>
+      ) : null}
+      {data.reviewReasons.length ? (
+        <section className="review-section card section-card" aria-labelledby="review-reasons-heading">
+          <div className="section-title"><div><p className="eyebrow">Review old watch reasons</p><h2 id="review-reasons-heading">{data.reviewReasons.length} watch {data.reviewReasons.length === 1 ? "reason may" : "reasons may"} need review</h2><p>This is a low-priority cleanup suggestion.</p></div></div>
+          <div className="review-list">{data.reviewReasons.map((reason) => <article key={reason.logicalIntentId}>
+            <div><strong>{reason.originalText ?? reason.type.replaceAll("_", " ")}</strong><span>{reason.reason}</span></div>
+            <div className="action-row">
+              {(reason.type === "EARNINGS" || reason.type === "DIVIDEND") ? <Button disabled={busy !== null} onClick={() => void reviewAction("renew", reason.logicalIntentId)}>{reason.type === "EARNINGS" ? "Watch next results" : "Watch next dividend"}</Button> : null}
+              <Link className="button button-secondary" href={`/stock/${reason.instrumentId.split(":").at(-1)}`}>Change reason</Link>
+              <Button variant="secondary" disabled={busy !== null} onClick={() => void reviewAction("resolve", reason.logicalIntentId)}>Resolve</Button>
+              <Button variant="ghost" disabled={busy !== null} onClick={() => void reviewAction("keep", reason.logicalIntentId)}>Keep watching</Button>
+            </div>
+          </article>)}</div>
         </section>
       ) : null}
       {data.quiet.length ? (

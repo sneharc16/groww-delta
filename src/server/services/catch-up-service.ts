@@ -3,9 +3,10 @@ import { AppError } from "@/lib/errors/app-error";
 import { DEFAULT_DEMO_SESSION_ID } from "@/lib/constants";
 import type { AcknowledgeInput } from "@/lib/validation/catch-up";
 import type { MarketDataProvider } from "@/server/market/providers/market-data-provider";
-import type { DemoSessionRepository, KnowledgeCursorRepository, WatchIntentRepository, WatchlistRepository } from "@/server/repositories/contracts";
-import { toAttentionItemDto, toCursorDto } from "@/server/dto/mappers";
+import type { DemoSessionRepository, KnowledgeAcknowledgementRepository, KnowledgeCursorRepository, WatchGraphRepository, WatchIntentRepository, WatchlistRepository } from "@/server/repositories/contracts";
+import { toAttentionItemDto, toCursorDto, toIntentLifecycleDto } from "@/server/dto/mappers";
 import type { AttentionItemDto, CatchUpDto } from "@/server/dto/types";
+import { evaluateIntentLifecycle } from "@/domain/intent/lifecycle";
 
 const scoreOrder = (a: AttentionItemDto, b: AttentionItemDto) => b.score - a.score || a.instrument.symbol.localeCompare(b.instrument.symbol);
 
@@ -16,6 +17,8 @@ export class CatchUpService {
     private readonly intents: WatchIntentRepository,
     private readonly sessions: DemoSessionRepository,
     private readonly market: MarketDataProvider,
+    private readonly graphs: WatchGraphRepository,
+    private readonly acknowledgements: KnowledgeAcknowledgementRepository,
   ) {}
 
   async getCatchUp(userId: string): Promise<CatchUpDto> {
@@ -31,7 +34,7 @@ export class CatchUpService {
         asOfSequence: state.currentSequence,
         asOfTime: state.currentTime.toISOString(),
         cursorSummary: { allAtSameSequence: true, minimumSequence: state.currentSequence, maximumSequence: state.currentSequence, commonLastSeenTime: state.currentTime.toISOString() },
-        relevant: [], significant: [], quiet: [], counts: { relevant: 0, significant: 0, quiet: 0 },
+        relevant: [], significant: [], quiet: [], counts: { relevant: 0, significant: 0, quiet: 0 }, intentLifecycle: [], reviewReasons: [],
       };
     }
     const [cursorRows, intentRows, snapshots] = await Promise.all([
@@ -41,7 +44,9 @@ export class CatchUpService {
     ]);
     if (cursorRows.length !== instrumentIds.length) throw new AppError("CURSOR_NOT_FOUND", "A watched instrument is missing its knowledge cursor.", 409);
     const minimumCursor = Math.min(...cursorRows.map((cursor) => cursor.lastSeenSequence));
-    const events = await this.market.getEventsBetween(minimumCursor, state.currentSequence);
+    const graphRows = await this.graphs.listActiveForIntentLogicalIds(userId, intentRows.map((intent) => intent.logicalIntentId));
+    const earliestEvidence = Math.min(minimumCursor, ...intentRows.map((intent) => Math.min(intent.effectiveFromSequence, state.currentSequence)), ...graphRows.map((graph) => Math.min(graph.effectiveFromSequence, state.currentSequence)));
+    const events = await this.market.getEventsBetween(earliestEvidence, state.currentSequence);
     const cursorByInstrument = new Map(cursorRows.map((cursor) => [cursor.instrumentId, cursor]));
     const items = watchlist.items.map((watchlistItem) => {
       const cursor = cursorByInstrument.get(watchlistItem.instrumentId);
@@ -52,8 +57,9 @@ export class CatchUpService {
         currentSequence: state.currentSequence,
         currentTime: state.currentTime,
         snapshots: snapshots.filter((snapshot) => snapshot.instrumentId === watchlistItem.instrumentId),
-        events: events.filter((event) => event.instrumentId === watchlistItem.instrumentId && event.sequence > cursor.lastSeenSequence),
+        events: events.filter((event) => (event.instrumentId === watchlistItem.instrumentId || event.instrumentId === null) && event.sequence > cursor.lastSeenSequence),
         activeIntents: intentRows.filter((intent) => intent.instrumentId === watchlistItem.instrumentId),
+        activeGraphs: graphRows.filter((graph) => graph.instrumentId === watchlistItem.instrumentId),
       });
       if (!result) throw new AppError("INVALID_MARKET_STATE", `Market snapshots are incomplete for ${watchlistItem.instrument.symbol}.`, 409);
       return toAttentionItemDto(result);
@@ -61,6 +67,19 @@ export class CatchUpService {
     const relevant = items.filter((item) => item.lane === "RELEVANT").sort(scoreOrder);
     const significant = items.filter((item) => item.lane === "SIGNIFICANT").sort(scoreOrder);
     const quiet = items.filter((item) => item.lane === "QUIET").sort((a, b) => a.instrument.symbol.localeCompare(b.instrument.symbol));
+    const intentLifecycle = intentRows.map((intent) => {
+      const cursor = cursorByInstrument.get(intent.instrumentId);
+      if (!cursor) throw new AppError("CURSOR_NOT_FOUND", "A watched instrument is missing its knowledge cursor.", 409);
+      return toIntentLifecycleDto(evaluateIntentLifecycle({
+        intent,
+        cursor,
+        snapshots: snapshots.filter((snapshot) => snapshot.instrumentId === intent.instrumentId),
+        events: events.filter((event) => event.instrumentId === intent.instrumentId),
+        currentSequence: state.currentSequence,
+        currentTime: state.currentTime,
+      }));
+    }).sort((a, b) => a.instrumentId.localeCompare(b.instrumentId) || a.logicalIntentId.localeCompare(b.logicalIntentId));
+    const reviewReasons = intentLifecycle.filter((intent) => intent.state === "RESOLUTION_ELIGIBLE" || intent.state === "STALE_CANDIDATE");
     const allAtSameSequence = cursorRows.every((cursor) => cursor.lastSeenSequence === cursorRows[0]?.lastSeenSequence);
     const commonTimes = new Set(cursorRows.map((cursor) => cursor.lastSeenEventTime?.toISOString() ?? null));
     return {
@@ -76,6 +95,8 @@ export class CatchUpService {
       significant,
       quiet,
       counts: { relevant: relevant.length, significant: significant.length, quiet: quiet.length },
+      intentLifecycle,
+      reviewReasons,
     };
   }
 
@@ -94,6 +115,8 @@ export class CatchUpService {
     const invalid = requestedIds.find((id) => !activeIds.has(id));
     if (invalid) throw new AppError("INSTRUMENT_NOT_WATCHED", "Acknowledgement is limited to active watchlist instruments.", 404);
     const snapshots = await this.market.getSnapshotsAtOrBefore(requestedIds, input.throughSequence);
+    const previousCursors = await this.cursors.listForInstruments(userId, requestedIds);
+    const previousByInstrument = new Map(previousCursors.map((cursor) => [cursor.instrumentId, cursor]));
     const snapshotByInstrument = new Map(snapshots.map((snapshot) => [snapshot.instrumentId, snapshot]));
     const updated = await Promise.all(requestedIds.map(async (instrumentId) => {
       const snapshot = snapshotByInstrument.get(instrumentId);
@@ -105,6 +128,17 @@ export class CatchUpService {
         snapshotId: snapshot.id,
       });
       if (!cursor) throw new AppError("CURSOR_NOT_FOUND", "The knowledge cursor does not exist.", 409);
+      const previous = previousByInstrument.get(instrumentId);
+      if (previous && previous.lastSeenSequence < input.throughSequence) {
+        await this.acknowledgements.create({
+          userId,
+          instrumentId,
+          fromSequence: previous.lastSeenSequence,
+          throughSequence: input.throughSequence,
+          scope: "scope" in input ? "WATCHLIST" : "INSTRUMENT",
+          acknowledgedAt: new Date(),
+        });
+      }
       return toCursorDto(cursor);
     }));
     return { throughSequence: input.throughSequence, cursors: updated };

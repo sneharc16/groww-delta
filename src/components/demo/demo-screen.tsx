@@ -84,6 +84,7 @@ export function DemoScreen() {
           <li className={state.currentStep === 1 ? "current" : ""}><strong>Step 1 · Normal movement</strong><span>Expected: nothing meaningful.</span></li>
           <li className={state.currentStep === 2 ? "current" : ""}><strong>Step 2 · Meaningful changes</strong><span>Expected: four direct intent matches and Reliance significance.</span></li>
           <li className={state.currentStep === 3 ? "current" : ""}><strong>Step 3 · Novelty test</strong><span>After Step 2 acknowledgement, old changes should not return.</span></li>
+          <li className={state.currentStep === 4 ? "current" : ""}><strong>Step 4 · Contextual relevance</strong><span>A Crude event reaches IndiGo through the user-confirmed fuel-cost relationship.</span></li>
         </ol>
         <details><summary>Upcoming simulated events</summary><p>Future event detail is not revealed by default. Events become available to the engine only at their assigned sequence.</p></details>
       </section>

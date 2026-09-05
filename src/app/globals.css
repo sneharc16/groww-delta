@@ -256,6 +256,12 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .attention-copy h4 { margin: 0 0 5px; font-size: 15px; }
 .attention-copy p { margin: 0; color: var(--muted); font-size: 13px; }
 .attention-copy .additional-signal, .additional-signal { margin-top: 8px; color: var(--intent); font-size: 12px; font-weight: 650; }
+.watch-reason-copy { margin-top: 9px !important; }
+.connection-explanation { margin-top: 12px; padding: 11px; border-radius: 10px; background: var(--intent-soft); }
+.connection-explanation > span { color: var(--intent); font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .06em; }
+.connection-explanation small { display: block; margin-top: 8px; color: var(--muted); }
+.connection-path { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; color: #303d75; font-size: 13px; font-weight: 680; }
+.connection-path span:not(:last-child)::after { content: "→"; margin-left: 6px; color: #8991bd; }
 .attention-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .attention-footer > span { color: var(--muted); font-size: 11px; }
 .attention-footer .button { min-height: 36px; padding: 7px 10px; font-size: 12px; }
@@ -263,6 +269,34 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .quiet-symbols { padding: 0 20px 13px; display: flex; flex-wrap: wrap; gap: 7px; }
 .quiet-symbols span { padding: 4px 8px; color: var(--muted); background: var(--surface-soft); border-radius: 7px; font-size: 11px; font-weight: 650; }
 .quiet-section > .text-button { margin-left: 20px; }
+.review-section { margin-top: 20px; border-color: #eadfca; }
+.review-list { display: grid; gap: 10px; }
+.review-list article { padding: 13px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border-radius: 11px; background: #fffaf0; }
+.review-list article > div:first-child { display: grid; gap: 2px; }
+.review-list span { color: var(--muted); font-size: 12px; }
+.related-list { display: grid; gap: 10px; }
+.related-row { padding: 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; border: 1px solid var(--border); border-radius: 12px; }
+.related-row > div:first-child { min-width: 220px; flex: 1; }
+.related-row p { margin: 0 0 7px; font-weight: 650; }
+.related-row small { display: block; margin-top: 7px; color: var(--muted); }
+.driver-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.driver-chips span { padding: 4px 8px; color: var(--intent); background: var(--intent-soft); border-radius: 999px; font-size: 12px; font-weight: 650; }
+.graph-history { width: 100%; color: var(--muted); font-size: 12px; }
+.graph-history summary { cursor: pointer; font-weight: 650; }
+.driver-options { margin: 0; padding: 0; display: grid; gap: 8px; border: 0; }
+.driver-options legend { margin-bottom: 8px; font-size: 13px; font-weight: 700; }
+.driver-options label { padding: 11px; display: flex; align-items: flex-start; gap: 10px; border: 1px solid var(--border); border-radius: 10px; }
+.driver-options label span { display: grid; }
+.driver-options small { color: var(--muted); }
+.lifecycle-card { border-color: #dcdff3; background: #fdfdff; }
+.lifecycle-card > p { color: var(--muted); }
+.watch-timeline { margin: 0; padding: 0; display: grid; gap: 0; list-style: none; }
+.watch-timeline li { position: relative; padding: 0 0 17px 22px; display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 12px; }
+.watch-timeline li::before { content: ""; position: absolute; top: 6px; left: 2px; width: 8px; height: 8px; border-radius: 50%; background: var(--intent); }
+.watch-timeline li:not(:last-child)::after { content: ""; position: absolute; top: 15px; bottom: 1px; left: 5px; width: 1px; background: #d6daf2; }
+.watch-timeline time { color: var(--muted); font-size: 11px; }
+.watch-timeline div { display: grid; }
+.watch-timeline span { color: var(--muted); font-size: 12px; }
 
 @media (max-width: 900px) {
   .watchlist-head { display: none; }
@@ -301,4 +335,6 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .attention-company { align-items: flex-start; flex-direction: column; }
   .attention-price { text-align: left; }
   .current-watchlist .section-title { align-items: flex-start; }
+  .review-list article { align-items: flex-start; flex-direction: column; }
+  .watch-timeline li { grid-template-columns: 62px minmax(0, 1fr); }
 }

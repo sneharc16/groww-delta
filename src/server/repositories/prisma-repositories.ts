@@ -7,6 +7,8 @@ import type {
   MarketEventRepository,
   MarketSnapshotRepository,
   KnowledgeCursorRepository,
+  KnowledgeAcknowledgementRepository,
+  WatchGraphRepository,
   WatchIntentRepository,
   WatchlistRepository,
 } from "./contracts";
@@ -20,6 +22,8 @@ const instrumentSelect = {
   currency: true,
   isActive: true,
 } as const;
+
+const graphInclude = { nodes: { orderBy: { nodeKey: "asc" as const } }, edges: { orderBy: { id: "asc" as const } } } as const;
 
 export class PrismaInstrumentRepository implements InstrumentRepository {
   listActive() {
@@ -98,6 +102,10 @@ export class PrismaWatchIntentRepository implements WatchIntentRepository {
     });
   }
 
+  findLatest(userId: string, logicalIntentId: string) {
+    return prisma.watchIntent.findFirst({ where: { userId, logicalIntentId }, orderBy: { version: "desc" } });
+  }
+
   create(input: CreateIntentRecordInput) {
     return prisma.watchIntent.create({ data: intentData(input) });
   }
@@ -115,6 +123,19 @@ export class PrismaWatchIntentRepository implements WatchIntentRepository {
 
   archiveCurrent(id: string) {
     return prisma.watchIntent.update({ where: { id }, data: { status: "ARCHIVED" } });
+  }
+
+
+  resolveCurrent(id: string, resolvedAt: Date, resolvedAtSequence: number) {
+    return prisma.watchIntent.update({ where: { id }, data: { status: "RESOLVED", resolvedAt, resolvedAtSequence } });
+  }
+
+  keepWatching(id: string, throughSequence: number) {
+    return prisma.watchIntent.update({ where: { id }, data: { lifecycleReviewedThroughSequence: throughSequence } });
+  }
+
+  renew(previousId: string, input: CreateIntentRecordInput) {
+    return prisma.watchIntent.create({ data: intentData({ ...input, supersedesId: previousId }) });
   }
 }
 
@@ -226,5 +247,79 @@ export class PrismaKnowledgeCursorRepository implements KnowledgeCursorRepositor
         cursorVersion: 1,
       },
     })));
+  }
+}
+
+export class PrismaKnowledgeAcknowledgementRepository implements KnowledgeAcknowledgementRepository {
+  create(input: Parameters<KnowledgeAcknowledgementRepository["create"]>[0]) {
+    return prisma.knowledgeAcknowledgement.create({ data: input });
+  }
+
+  listForInstrument(userId: string, instrumentId: string) {
+    return prisma.knowledgeAcknowledgement.findMany({
+      where: { userId, instrumentId },
+      orderBy: [{ throughSequence: "asc" }, { acknowledgedAt: "asc" }],
+    });
+  }
+}
+
+export class PrismaWatchGraphRepository implements WatchGraphRepository {
+  listActiveForIntentLogicalIds(userId: string, logicalIntentIds: string[]) {
+    if (logicalIntentIds.length === 0) return Promise.resolve([]);
+    return prisma.watchGraph.findMany({
+      where: { userId, watchIntentLogicalId: { in: logicalIntentIds }, status: "ACTIVE" },
+      include: graphInclude,
+      orderBy: [{ watchIntentLogicalId: "asc" }, { version: "desc" }],
+    });
+  }
+
+  listForIntent(userId: string, logicalIntentId: string) {
+    return prisma.watchGraph.findMany({
+      where: { userId, watchIntentLogicalId: logicalIntentId },
+      include: graphInclude,
+      orderBy: { version: "desc" },
+    });
+  }
+
+  findActive(userId: string, logicalIntentId: string) {
+    return prisma.watchGraph.findFirst({
+      where: { userId, watchIntentLogicalId: logicalIntentId, status: "ACTIVE" },
+      include: graphInclude,
+      orderBy: { version: "desc" },
+    });
+  }
+
+  createVersion(previousId: string | null, input: Parameters<WatchGraphRepository["createVersion"]>[1]) {
+    return prisma.$transaction(async (transaction) => {
+      if (previousId) {
+        await transaction.watchGraph.updateMany({ where: { id: previousId, status: "ACTIVE" }, data: { status: "SUPERSEDED" } });
+      }
+      await transaction.watchGraph.create({
+        data: {
+          id: input.id,
+          logicalGraphId: input.logicalGraphId,
+          userId: input.userId,
+          instrumentId: input.instrumentId,
+          watchIntentLogicalId: input.watchIntentLogicalId,
+          version: input.version,
+          provenance: input.provenance,
+          templateKey: input.templateKey,
+          effectiveFromSequence: input.effectiveFromSequence,
+          supersedesId: input.supersedesId,
+          nodes: { create: input.nodes.map((node) => ({ id: node.id, nodeKey: node.nodeKey, type: node.type, label: node.label, metadata: (node.metadata ?? {}) as Prisma.InputJsonValue })) },
+        },
+      });
+      if (input.edges.length) {
+        await transaction.watchGraphEdge.createMany({ data: input.edges.map((edge) => ({ id: edge.id, graphId: input.id, fromNodeId: edge.fromNodeId, toNodeId: edge.toNodeId, relationship: edge.relationship, weight: edge.weight })) });
+      }
+      const created = await transaction.watchGraph.findUnique({ where: { id: input.id }, include: graphInclude });
+      if (!created) throw new Error("The graph version could not be loaded after creation.");
+      return created;
+    });
+  }
+
+  async archiveActiveForIntent(userId: string, logicalIntentId: string) {
+    const result = await prisma.watchGraph.updateMany({ where: { userId, watchIntentLogicalId: logicalIntentId, status: "ACTIVE" }, data: { status: "ARCHIVED" } });
+    return result.count;
   }
 }

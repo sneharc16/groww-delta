@@ -107,3 +107,69 @@
 **Decision:** Signals inside one cursor window aggregate into a single AttentionItem for each instrument.
 
 **Reason:** This reduces consumer noise without prematurely implementing general semantic event clustering.
+
+## ADR-019: Relational Watch Graphs
+
+**Decision:** Store small user-specific graphs as PostgreSQL node and edge tables, not Neo4j.
+
+**Reason:** The bounded prototype graph fits the existing modular monolith and does not justify separate infrastructure.
+
+## ADR-020: Relationships require confirmation
+
+**Decision:** Curated templates are suggestions; only explicit user confirmation creates a matching graph.
+
+**Reason:** Context should reflect what the user chose to track, not an opaque product assertion.
+
+## ADR-021: Weights represent relevance
+
+**Decision:** Edge weights are deterministic relevance strength, not causal probability or predicted impact.
+
+**Reason:** The system explains context without claiming direction, certainty, or a recommendation.
+
+## ADR-022: Bounded traversal
+
+**Decision:** Traverse no more than three edges or 25 nodes.
+
+**Reason:** Small bounds keep behavior understandable and guard malformed graphs from uncontrolled recursion.
+
+## ADR-023: Immutable graph versions
+
+**Decision:** Relationship edits supersede and append, with a market-effective sequence.
+
+**Reason:** Historical meaning remains explainable and new relationships do not retroactively match old events.
+
+## ADR-024: Context is not a recommendation
+
+**Decision:** Graph matches say a configured relationship changed; they never infer bullish/bearish outcomes.
+
+**Reason:** Relevance to a watch question does not establish causal direction or an investment action.
+
+## ADR-025: Resolution follows acknowledgement
+
+**Decision:** A matching event makes a resolvable intent eligible only after the user cursor has crossed it.
+
+**Reason:** An event occurring and the user consuming its update are different states.
+
+## ADR-026: Resolution does not remove stocks
+
+**Decision:** Resolving the last reason leaves the watchlist item active.
+
+**Reason:** Cleanup remains user-controlled and intent lifecycle is separate from watchlist membership.
+
+## ADR-027: Curated templates before generated graphs
+
+**Decision:** Build 3 exposes only deterministic product-authored templates.
+
+**Reason:** They are auditable and testable without LLMs, external research, or unsupported causal claims.
+
+## ADR-028: Normalized event descriptors
+
+**Decision:** Add subject and tags while preserving each event's typed payload. Subject is authoritative when present; tags are fallback descriptors.
+
+**Reason:** A generic matching surface enables graph traversal, while subject precedence ensures removing a specifically tracked driver cannot be bypassed by a broader tag.
+
+## ADR-029: Acknowledgement history complements cursors
+
+**Decision:** Persist one per-instrument acknowledgement row for both individual and mark-all commands.
+
+**Reason:** Cursor state remains compact and monotonic while timeline/audit views retain action history without duplicating watchlist-wide entries.

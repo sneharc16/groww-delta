@@ -12,6 +12,8 @@ import {
 } from "./significance";
 import type { AttentionAnalysisInput, AttentionItem } from "./types";
 import type { AttentionReasonCode } from "./reason-codes";
+import { matchGraphEvents } from "@/domain/graph/traversal";
+import type { IntentMatch } from "./types";
 
 export function analyzeInstrument(input: AttentionAnalysisInput): AttentionItem | null {
   const orderedSnapshots = [...input.snapshots].sort((a, b) => a.sequence - b.sequence);
@@ -23,6 +25,7 @@ export function analyzeInstrument(input: AttentionAnalysisInput): AttentionItem 
   const windowEvents = hasWindow
     ? input.events.filter((event) => event.sequence > input.cursor.lastSeenSequence && event.sequence <= input.currentSequence)
     : [];
+  const localEvents = windowEvents.filter((event) => event.instrumentId === input.instrument.id);
   const priceDeltaPaise = current.pricePaise - baseline.pricePaise;
   const priceDeltaBps = hasWindow ? calculatePriceDeltaBps(baseline.pricePaise, current.pricePaise) : 0;
   const expectedWindowMoveBps = hasWindow
@@ -31,25 +34,54 @@ export function analyzeInstrument(input: AttentionAnalysisInput): AttentionItem 
   const priceResult = hasWindow ? calculatePriceSignificance(priceDeltaBps, expectedWindowMoveBps) : { priceSurprise: null, significance: 0 };
   const volumeRatio = calculateVolumeRatio(current);
   const volumeSignificance = hasWindow ? volumeSignificanceFromRatio(volumeRatio) : 0;
-  const eventSignificance = hasWindow ? Math.max(0, ...windowEvents.map((event) => EVENT_SIGNIFICANCE[event.type])) : 0;
+  const eventSignificance = hasWindow ? Math.max(0, ...localEvents.map((event) => EVENT_SIGNIFICANCE[event.type])) : 0;
   const combined = combineSignificance(priceResult.significance, volumeSignificance, eventSignificance);
-  const matchedIntents = hasWindow ? matchIntents({
+  const directMatches = hasWindow ? matchIntents({
     intents: input.activeIntents,
     snapshots: orderedSnapshots,
-    events: windowEvents,
+    events: localEvents,
     cursorSequence: input.cursor.lastSeenSequence,
     currentSequence: input.currentSequence,
   }) : [];
-  const relevance = matchedIntents.length ? 100 : 0;
+  const intentByLogicalId = new Map(input.activeIntents.map((intent) => [intent.logicalIntentId, intent]));
+  const graphMatches = hasWindow ? input.activeGraphs.flatMap((graph) => {
+    const intent = intentByLogicalId.get(graph.watchIntentLogicalId);
+    return intent ? matchGraphEvents({ graph, intent, events: windowEvents, cursorSequence: input.cursor.lastSeenSequence, currentSequence: input.currentSequence }) : [];
+  }) : [];
+  const directKeys = new Set(directMatches.flatMap((match) => match.eventIds.map((eventId) => `${match.logicalIntentId}:${eventId}`)));
+  const contextualMatches: IntentMatch[] = graphMatches
+    .filter((match) => !directKeys.has(`${match.logicalIntentId}:${match.eventId}`))
+    .map((match): IntentMatch => {
+      const intent = intentByLogicalId.get(match.logicalIntentId);
+      return {
+        matchType: "GRAPH" as const,
+        logicalIntentId: match.logicalIntentId,
+        version: intent?.version ?? 1,
+        type: intent?.type ?? "GENERAL",
+        originalText: intent?.originalText ?? null,
+        reasonCode: match.path.at(-1)?.type === "METRIC" ? "RELATED_METRIC_CHANGED" : "RELATED_DRIVER_CHANGED",
+        urgency: 60,
+        relevance: match.relevance,
+        eventIds: [match.eventId],
+        transitionSnapshotIds: [],
+        metadata: { eventSubjectKey: match.eventSubjectKey, matchedNodeKey: match.matchedNodeKey, pathDepth: match.pathDepth, pathWeight: match.relevance },
+        graphMatch: match,
+      };
+    })
+    .sort((a, b) => b.relevance - a.relevance || b.urgency - a.urgency || a.logicalIntentId.localeCompare(b.logicalIntentId));
+  const matchedIntents = [...directMatches, ...contextualMatches].sort((a, b) => b.relevance - a.relevance || b.urgency - a.urgency || a.logicalIntentId.localeCompare(b.logicalIntentId));
+  const strongestGraphMatch = contextualMatches[0]?.graphMatch ?? null;
+  const relevance = directMatches.length ? 100 : Math.max(0, ...contextualMatches.map((match) => match.relevance));
   const urgency = Math.max(0, ...matchedIntents.map((match) => match.urgency));
-  const hasActualChange = hasWindow && (current.id !== baseline.id || windowEvents.length > 0 || priceDeltaPaise !== 0);
+  const hasActualChange = hasWindow && (current.id !== baseline.id || localEvents.length > 0 || contextualMatches.length > 0 || priceDeltaPaise !== 0);
   const novelty = hasActualChange ? 100 : 0;
-  const usedQualities = [baseline.quality, current.quality, ...windowEvents.filter((event) => EVENT_SIGNIFICANCE[event.type] > 0 || matchedIntents.some((match) => match.eventIds.includes(event.id))).map((event) => event.quality)];
+  const usedQualities = [baseline.quality, current.quality, ...windowEvents.filter((event) => (event.instrumentId === input.instrument.id && EVENT_SIGNIFICANCE[event.type] > 0) || matchedIntents.some((match) => match.eventIds.includes(event.id))).map((event) => event.quality)];
   const confidence = Math.min(...usedQualities.map((quality) => QUALITY_CONFIDENCE[quality]));
   const lane = classifyLane(relevance, combined.significance);
   const reasonCodes: AttentionReasonCode[] = [];
   if (novelty > 0) reasonCodes.push("NEW_SINCE_LAST_SEEN");
   reasonCodes.push(...matchedIntents.map((match) => match.reasonCode));
+  if (contextualMatches.length) reasonCodes.push("GRAPH_RELEVANCE_MATCHED");
   if (priceResult.significance >= 50) reasonCodes.push("UNUSUAL_PRICE_MOVE");
   if (volumeSignificance >= 50) reasonCodes.push("UNUSUAL_VOLUME");
   if (eventSignificance >= 50) reasonCodes.push("MATERIAL_MARKET_EVENT");
@@ -83,8 +115,9 @@ export function analyzeInstrument(input: AttentionAnalysisInput): AttentionItem 
     score: calculateAttentionScore({ significance: combined.significance, relevance, novelty, urgency, confidence }),
     lane,
     matchedIntents,
+    relevancePaths: contextualMatches.flatMap((match) => match.graphMatch ? [match.graphMatch.path] : []),
     reasonCodes: [...new Set(reasonCodes)],
-    eventSummaries: windowEvents.map((event) => ({ id: event.id, type: event.type, eventTime: event.eventTime, quality: event.quality, payload: event.payload })),
-    display: buildAttentionDisplay({ name: input.instrument.name, topMatch: matchedIntents[0] ?? null, priceSignificance: priceResult.significance, volumeSignificance, eventSignificance, volumeRatio, baselinePricePaise: baseline.pricePaise, currentPricePaise: current.pricePaise }),
+    eventSummaries: windowEvents.filter((event) => event.instrumentId === input.instrument.id || matchedIntents.some((match) => match.eventIds.includes(event.id))).map((event) => ({ id: event.id, type: event.type, eventTime: event.eventTime, quality: event.quality, payload: event.payload, subjectKey: event.subjectKey, tags: event.tags })),
+    display: buildAttentionDisplay({ name: input.instrument.name, topMatch: matchedIntents[0] ?? null, strongestGraphMatch, priceSignificance: priceResult.significance, volumeSignificance, eventSignificance, volumeRatio, baselinePricePaise: baseline.pricePaise, currentPricePaise: current.pricePaise }),
   };
 }

@@ -1,7 +1,13 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type APIRequestContext } from "@playwright/test";
 
-test("watch reason versioning and deterministic replay smoke flow", async ({ page }) => {
+async function ensureWatched(request: APIRequestContext, instrumentId: string) {
+  const response = await request.post("/api/watchlist/items", { data: { instrumentId } });
+  expect([201, 409]).toContain(response.status());
+}
+
+test("watch reason versioning and deterministic replay smoke flow", async ({ page, request }) => {
   await page.request.post("/api/demo/reset");
+  await ensureWatched(request, "NSE:TCS");
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Catch Up" })).toBeVisible();
 
@@ -28,6 +34,9 @@ test("watch reason versioning and deterministic replay smoke flow", async ({ pag
 });
 
 test("duplicate rejection and watchlist archive/re-add survive refresh", async ({ page, request }) => {
+  expect((await request.post("/api/demo/reset")).ok()).toBeTruthy();
+  expect((await request.post("/api/demo/advance")).ok()).toBeTruthy();
+  await ensureWatched(request, "NSE:RELIANCE");
   const duplicate = await request.post("/api/watchlist/items", { data: { instrumentId: "NSE:RELIANCE" } });
   expect(duplicate.status()).toBe(409);
   await expect(duplicate.json()).resolves.toMatchObject({ error: { code: "DUPLICATE_WATCHLIST_ITEM" } });

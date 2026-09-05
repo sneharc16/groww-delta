@@ -11,12 +11,16 @@ import {
   MemoryEventRepository,
   MemoryIntentRepository,
   MemoryKnowledgeCursorRepository,
+  MemoryKnowledgeAcknowledgementRepository,
+  MemoryWatchGraphRepository,
   MemorySnapshotRepository,
   MemoryWatchlistRepository,
   cursorRecord,
+  graphRecord,
   intentRecord,
   watchlistRecord,
 } from "../../../tests/helpers/in-memory";
+import { findDriverTemplate, graphDraftFromTemplate } from "@/domain/graph/templates";
 
 const instruments: InstrumentRecord[] = replayInstruments.map((instrument) => ({ ...instrument, currency: "INR", isActive: true }));
 const snapshots: MarketSnapshotRecord[] = defaultReplayScenario.steps.flatMap((step) => step.snapshots.map((snapshot) => ({
@@ -52,8 +56,13 @@ function scenario() {
   const watchlists = new MemoryWatchlistRepository(watchlistRecord(watchlistItems));
   const intents = new MemoryIntentRepository(seededIntents.map((intent) => ({ ...intent })));
   const provider = new ReplayMarketProvider(sessions, new MemorySnapshotRepository(snapshots), new MemoryEventRepository(events));
-  const service = new CatchUpService(watchlists, cursors, intents, sessions, provider);
-  return { service, sessions, cursors, watchlists, intents, provider };
+  const acknowledgements = new MemoryKnowledgeAcknowledgementRepository();
+  const indigoTemplate = findDriverTemplate("AIRLINE_FUEL_COST", "NSE:INDIGO");
+  const graphs = new MemoryWatchGraphRepository([
+    graphRecord(graphDraftFromTemplate(indigoTemplate, ["FUEL_COST", "CRUDE"])),
+  ]);
+  const service = new CatchUpService(watchlists, cursors, intents, sessions, provider, graphs, acknowledgements);
+  return { service, sessions, cursors, watchlists, intents, provider, graphs, acknowledgements };
 }
 
 async function moveTo(sessions: MemoryDemoSessionRepository, stepIndex: number) {
@@ -89,6 +98,8 @@ describe("CatchUpService default scenario", () => {
     expect(result.relevant.find((item) => item.instrument.symbol === "HDFCBANK")?.reasonCodes).toContain("PRICE_TARGET_NEAR_ENTERED");
     expect(result.relevant.find((item) => item.instrument.symbol === "TATAMOTORS")?.reasonCodes).toEqual(expect.arrayContaining(["TECHNICAL_SETUP_MATCHED", "UNUSUAL_VOLUME", "MULTIPLE_SIGNALS"]));
     expect(result.relevant.find((item) => item.instrument.symbol === "INDIGO")?.reasonCodes).toContain("DRIVER_EVENT_MATCHED");
+    expect(result.relevant.find((item) => item.instrument.symbol === "INDIGO")?.matchedIntents.every((match) => match.matchType === "DIRECT")).toBe(true);
+    expect(result.relevant.find((item) => item.instrument.symbol === "INDIGO")?.relevance).toBe(100);
     expect(result.significant[0].reasonCodes).toContain("UNUSUAL_PRICE_MOVE");
   });
 
@@ -98,17 +109,38 @@ describe("CatchUpService default scenario", () => {
     expect(setup.cursors.rows.find((cursor) => cursor.instrumentId === "NSE:TCS")?.lastSeenSequence).toBe(2);
     expect(setup.cursors.rows.filter((cursor) => cursor.instrumentId !== "NSE:TCS").every((cursor) => cursor.lastSeenSequence === 0)).toBe(true);
     expect((await setup.service.getCatchUp("demo-user")).relevant.map((item) => item.instrument.symbol)).not.toContain("TCS");
+    expect(setup.acknowledgements.rows).toEqual([expect.objectContaining({ instrumentId: "NSE:TCS", fromSequence: 0, throughSequence: 2, scope: "INSTRUMENT" })]);
   });
 
   it("mark-all catches up every active instrument and Step 3 does not repeat Step 2", async () => {
     await moveTo(setup.sessions, 2);
     await setup.service.acknowledge("demo-user", { scope: "ALL", throughSequence: 2 });
+    expect(setup.acknowledgements.rows).toHaveLength(5);
+    expect(setup.acknowledgements.rows.every((row) => row.scope === "WATCHLIST")).toBe(true);
     expect((await setup.service.getCatchUp("demo-user")).counts).toEqual({ relevant: 0, significant: 0, quiet: 5 });
     await moveTo(setup.sessions, 3);
     const step3 = await setup.service.getCatchUp("demo-user");
     expect(step3.counts).toEqual({ relevant: 0, significant: 0, quiet: 5 });
     expect(step3.relevant).toEqual([]);
     expect(step3.significant).toEqual([]);
+  });
+
+  it("derives Step 4 IndiGo relevance from the configured Crude path, not direct matching", async () => {
+    await moveTo(setup.sessions, 2);
+    await setup.service.acknowledge("demo-user", { scope: "ALL", throughSequence: 2 });
+    await moveTo(setup.sessions, 3);
+    expect((await setup.service.getCatchUp("demo-user")).counts).toEqual({ relevant: 0, significant: 0, quiet: 5 });
+    await moveTo(setup.sessions, 4);
+    const result = await setup.service.getCatchUp("demo-user");
+    expect(result.counts).toEqual({ relevant: 1, significant: 0, quiet: 4 });
+    const indigo = result.relevant[0];
+    expect(indigo.instrument.symbol).toBe("INDIGO");
+    expect(indigo.matchedIntents).toHaveLength(1);
+    expect(indigo.matchedIntents[0]).toMatchObject({ matchType: "GRAPH", relevance: 85 });
+    expect(indigo.reasonCodes).toEqual(expect.arrayContaining(["GRAPH_RELEVANCE_MATCHED", "RELATED_DRIVER_CHANGED"]));
+    expect(indigo.relevancePaths[0].map((node) => node.key)).toEqual(["NSE:INDIGO", "FUEL_COST", "CRUDE"]);
+    expect(indigo.priceSignificance).toBeLessThan(50);
+    expect(indigo.matchedIntents.some((match) => match.matchType === "DIRECT")).toBe(false);
   });
 
   it("does not advance an archived watchlist instrument during mark-all", async () => {
@@ -135,5 +167,6 @@ describe("CatchUpService default scenario", () => {
     const cursor = setup.cursors.rows.find((row) => row.instrumentId === "NSE:TCS");
     expect(cursor?.lastSeenSequence).toBe(2);
     expect(cursor?.cursorVersion).toBe(version);
+    expect(setup.acknowledgements.rows).toHaveLength(1);
   });
 });

@@ -1,5 +1,6 @@
 export type MarketQuality = "FRESH" | "DELAYED" | "STALE" | "CONFLICTING" | "CORRECTED";
 export type MarketEventType = "QUOTE_UPDATE" | "RESULTS_PUBLISHED" | "TECHNICAL_TRANSITION" | "CORPORATE_EVENT" | "EXTERNAL_DRIVER" | "NEWS_EVENT";
+export type EventSubjectType = "INSTRUMENT" | "METRIC" | "DRIVER" | "EXTERNAL_DRIVER" | "EVENT_CATEGORY" | "PRICE_CONDITION";
 
 export interface MarketSnapshotRecord {
   id: string;
@@ -27,6 +28,9 @@ export interface MarketEventRecord {
   source: string;
   quality: MarketQuality;
   payload: unknown;
+  subjectType: EventSubjectType | null;
+  subjectKey: string | null;
+  tags: string[];
   correctionOfId: string | null;
 }
 
@@ -48,4 +52,14 @@ export interface KnowledgeCursorRecord {
   cursorVersion: number;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface KnowledgeAcknowledgementRecord {
+  id: string;
+  userId: string;
+  instrumentId: string;
+  fromSequence: number;
+  throughSequence: number;
+  scope: "INSTRUMENT" | "WATCHLIST";
+  acknowledgedAt: Date;
 }

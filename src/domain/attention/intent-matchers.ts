@@ -33,15 +33,18 @@ function priceMatch(intent: WatchIntentRecord, snapshots: MarketSnapshotRecord[]
           : null;
     if (qualityAllowsConfirmation && reasonCode) {
       return {
+        matchType: "DIRECT",
         logicalIntentId: intent.logicalIntentId,
         version: intent.version,
         type: intent.type,
         originalText: intent.originalText,
         reasonCode,
         urgency: reasonCode === "PRICE_TARGET_NEAR_ENTERED" ? 80 : 100,
+        relevance: 100,
         eventIds: [],
         transitionSnapshotIds: [previous.id, current.id],
         metadata: { targetPricePaise: target, fromPricePaise: previous.pricePaise, toPricePaise: current.pricePaise },
+        graphMatch: null,
       };
     }
     previous = current;
@@ -51,15 +54,18 @@ function priceMatch(intent: WatchIntentRecord, snapshots: MarketSnapshotRecord[]
 
 function eventMatch(intent: WatchIntentRecord, events: MarketEventRecord[]): IntentMatch | null {
   const match = (event: MarketEventRecord, reasonCode: IntentMatch["reasonCode"], urgency: number, metadata: Record<string, string | number> = {}): IntentMatch => ({
+    matchType: "DIRECT",
     logicalIntentId: intent.logicalIntentId,
     version: intent.version,
     type: intent.type,
     originalText: intent.originalText,
     reasonCode,
     urgency,
+    relevance: 100,
     eventIds: [event.id],
     transitionSnapshotIds: [],
     metadata,
+    graphMatch: null,
   });
 
   if (intent.type === "EARNINGS") {

@@ -2,11 +2,12 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, Prisma } from "../src/generated/prisma/client";
 import { defaultReplayScenario, replayInstruments } from "../data/replay/default-scenario";
+import { findDriverTemplate, graphDraftFromTemplate } from "../src/domain/graph/templates";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is required for seeding.");
 
-const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString, max: 1 }) });
 
 const seededIntents = [
   {
@@ -97,6 +98,50 @@ async function main() {
     });
   }
 
+  const indigoGraphId = "watch-graph:indigo:fuel-cost:1";
+  const indigoTemplate = findDriverTemplate("AIRLINE_FUEL_COST", "NSE:INDIGO");
+  const indigoGraph = graphDraftFromTemplate(indigoTemplate, ["FUEL_COST", "CRUDE"]);
+  await prisma.watchGraph.upsert({
+    where: { id: indigoGraphId },
+    update: {},
+    create: {
+      id: indigoGraphId,
+      logicalGraphId: "watch-graph:indigo:fuel-cost",
+      userId: "demo-user",
+      instrumentId: "NSE:INDIGO",
+      watchIntentLogicalId: "intent:indigo:driver",
+      version: 1,
+      status: "ACTIVE",
+      provenance: "IMPORTED_DEMO",
+      templateKey: indigoTemplate.key,
+      effectiveFromSequence: 0,
+      nodes: {
+        create: indigoGraph.nodes.map((node) => ({
+          id: `${indigoGraphId}:node:${node.nodeKey.toLowerCase()}`,
+          nodeKey: node.nodeKey,
+          type: node.type,
+          label: node.label,
+          metadata: (node.metadata ?? {}) as Prisma.InputJsonValue,
+        })),
+      },
+    },
+  });
+  const indigoNodeId = (nodeKey: string) => `${indigoGraphId}:node:${nodeKey.toLowerCase()}`;
+  for (const [index, edge] of indigoGraph.edges.entries()) {
+    await prisma.watchGraphEdge.upsert({
+      where: { id: `${indigoGraphId}:edge:${index}` },
+      update: {},
+      create: {
+        id: `${indigoGraphId}:edge:${index}`,
+        graphId: indigoGraphId,
+        fromNodeId: indigoNodeId(edge.fromKey),
+        toNodeId: indigoNodeId(edge.toKey),
+        relationship: edge.relationship,
+        weight: edge.weight,
+      },
+    });
+  }
+
   for (const step of defaultReplayScenario.steps) {
     for (const snapshot of step.snapshots) {
       const id = `snapshot:${step.sequence}:${snapshot.instrumentId}`;
@@ -136,7 +181,14 @@ async function main() {
   for (const event of defaultReplayScenario.events) {
     await prisma.marketEvent.upsert({
       where: { id: event.id },
-      update: {},
+      update: {
+        eventTime: new Date(event.eventTime),
+        receivedTime: new Date(event.eventTime),
+        subjectType: event.subjectType,
+        subjectKey: event.subjectKey,
+        tags: event.tags,
+        payload: event.payload as Prisma.InputJsonValue,
+      },
       create: {
         ...event,
         eventTime: new Date(event.eventTime),

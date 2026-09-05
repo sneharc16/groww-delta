@@ -19,14 +19,14 @@ export function IntentList({ active, all, onEdit, onAdd, onArchive }: {
           <div>
             <p className="intent-type">{intent.type.replaceAll("_", " ")}</p>
             <h3>{summarizeIntent(intent)}</h3>
-            <p className="intent-source">Added from: {PROVENANCE_LABELS[intent.provenanceSource]}</p>
+            <p className="intent-source">Added from: {PROVENANCE_LABELS[intent.provenanceSource]} · Watching since {formatISTDateTime(intent.createdAt)}</p>
           </div>
           <div className="action-row">
             <Button variant="secondary" onClick={() => onEdit(intent)}><Pencil size={15} /> Edit</Button>
             <Button variant="ghost" onClick={() => onArchive(intent)}><Archive size={15} /> Archive</Button>
           </div>
         </article>
-      )) : <div className="empty-reason"><p>No watch reason set</p><span>Add context so this watchlist remembers why you care.</span></div>}
+      )) : <div className="empty-reason"><p>No active watch reason</p><span>The stock stays in your watchlist. Add context whenever you need it.</span></div>}
       <Button variant="secondary" onClick={onAdd}><Plus size={16} /> Add another reason</Button>
       {all.length ? (
         <details className="history-panel">

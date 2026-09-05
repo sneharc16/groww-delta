@@ -54,10 +54,10 @@ describe("deterministic replay", () => {
   });
 
   it("does not advance beyond the final replay step", async () => {
-    await service.advance(); await service.advance(); await service.advance();
+    await service.advance(); await service.advance(); await service.advance(); await service.advance();
     const result = await service.advance();
     expect(result.advanced).toBe(false);
-    expect(result.currentStep).toBe(3);
+    expect(result.currentStep).toBe(4);
     expect(result.message).toContain("final step");
   });
 

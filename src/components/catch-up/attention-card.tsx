@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Check, CircleAlert } from "lucide-react";
 import type { AttentionItemDto } from "@/server/dto/types";
-import { formatINRFromPaise, formatISTTime } from "@/lib/format/market";
+import { formatINRFromPaise, formatISTTime, formatPercentage } from "@/lib/format/market";
 import { Button } from "@/components/ui/button";
 
 export function AttentionCard({ item, onMarkSeen, busy }: {
@@ -22,6 +22,8 @@ export function AttentionCard({ item, onMarkSeen, busy }: {
       <div className="attention-copy">
         <h4>{item.display.headline}</h4>
         <p>{item.display.whySeeing}</p>
+        {item.display.watchReason ? <p className="watch-reason-copy"><strong>You&apos;re watching:</strong> {item.display.watchReason}</p> : null}
+        {item.display.connectionPath.length ? <div className="connection-explanation"><span>Why this is connected</span><div className="connection-path">{item.display.connectionPath.map((label, index) => <span key={`${label}-${index}`}>{label}</span>)}</div><small>{item.instrument.name} itself: {formatPercentage(item.priceDeltaBps / 100)} since you last checked</small></div> : null}
         {item.display.additionalSignals.map((signal) => <p className="additional-signal" key={signal}>{signal}</p>)}
       </div>
       <div className="attention-footer">

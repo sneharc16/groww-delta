@@ -1,7 +1,9 @@
 import type { IntentStatus, IntentType, ProvenanceSource } from "@/domain/intent/types";
-import type { MarketEventType, MarketQuality } from "@/domain/market/types";
+import type { EventSubjectType, MarketEventType, MarketQuality } from "@/domain/market/types";
 import type { AttentionLane, AttentionDisplay, IntentMatch } from "@/domain/attention/types";
 import type { AttentionReasonCode } from "@/domain/attention/reason-codes";
+import type { GraphMatch, GraphNodeType, GraphProvenance, GraphStatus, RelevancePathNode } from "@/domain/graph/types";
+import type { IntentLifecycleState } from "@/domain/intent/lifecycle";
 
 export interface InstrumentDto {
   id: string;
@@ -41,6 +43,9 @@ export interface WatchIntentDto {
   status: IntentStatus;
   version: number;
   effectiveFromSequence: number;
+  resolvedAt: string | null;
+  resolvedAtSequence: number | null;
+  lifecycleReviewedThroughSequence: number | null;
   supersedesId: string | null;
   horizon: string | null;
   expiresAt: string | null;
@@ -81,6 +86,9 @@ export interface MarketEventDto {
   source: string;
   quality: MarketQuality;
   payload: unknown;
+  subjectType: EventSubjectType | null;
+  subjectKey: string | null;
+  tags: string[];
   correctionOfId: string | null;
 }
 
@@ -118,7 +126,8 @@ export interface AttentionItemDto {
   confidence: number;
   score: number;
   lane: AttentionLane;
-  matchedIntents: IntentMatch[];
+  matchedIntents: Array<Omit<IntentMatch, "graphMatch"> & { graphMatch: Omit<GraphMatch, "event"> | null }>;
+  relevancePaths: RelevancePathNode[][];
   reasonCodes: AttentionReasonCode[];
   eventSummaries: Array<{
     id: string;
@@ -126,6 +135,8 @@ export interface AttentionItemDto {
     eventTime: string;
     quality: MarketQuality;
     payload: unknown;
+    subjectKey: string | null;
+    tags: string[];
   }>;
   display: AttentionDisplay;
 }
@@ -143,4 +154,54 @@ export interface CatchUpDto {
   significant: AttentionItemDto[];
   quiet: AttentionItemDto[];
   counts: { relevant: number; significant: number; quiet: number };
+  intentLifecycle: IntentLifecycleDto[];
+  reviewReasons: IntentLifecycleDto[];
+}
+
+export interface WatchGraphDto {
+  id: string;
+  logicalGraphId: string;
+  watchIntentLogicalId: string;
+  version: number;
+  status: GraphStatus;
+  provenance: GraphProvenance;
+  templateKey: string | null;
+  effectiveFromSequence: number;
+  root: { key: string; label: string; type: GraphNodeType };
+  relatedDrivers: Array<{ key: string; label: string; type: GraphNodeType }>;
+  connections: Array<{ fromKey: string; toKey: string; label: string }>;
+  createdAt: string;
+}
+
+export interface DriverSuggestionDto {
+  templateKey: string;
+  templateLabel: string;
+  description: string;
+  nodes: Array<{ key: string; label: string; type: GraphNodeType; description: string; selectedByDefault: boolean }>;
+}
+
+export interface IntentLifecycleDto {
+  logicalIntentId: string;
+  instrumentId: string;
+  type: IntentType;
+  originalText: string | null;
+  state: IntentLifecycleState;
+  triggerSequence: number | null;
+  triggerTime: string | null;
+  reason: string | null;
+  actions: string[];
+}
+
+export interface WatchTimelineEntryDto {
+  id: string;
+  kind: "INTENT_STARTED" | "INTENT_CHANGED" | "MARKET_EVENT" | "ACKNOWLEDGED" | "RESOLVED" | "GRAPH_CHANGED";
+  sequence: number | null;
+  occurredAt: string;
+  title: string;
+  detail: string | null;
+}
+
+export interface WatchLifecycleDto {
+  lifecycle: IntentLifecycleDto[];
+  timeline: WatchTimelineEntryDto[];
 }

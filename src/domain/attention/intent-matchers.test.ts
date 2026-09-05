@@ -15,13 +15,14 @@ function intent(type: IntentType, structuredPayload: unknown, effectiveFromSeque
   return {
     id: "v1", logicalIntentId: `logical-${type}`, userId: "demo-user", instrumentId: "NSE:TEST", type,
     originalText: "Watching test condition", structuredPayload, provenanceSource: "MANUAL", provenanceReference: null,
-    status: "ACTIVE", version: 1, effectiveFromSequence, supersedesId: null, horizon: null, expiresAt: null,
+    status: "ACTIVE", version: 1, effectiveFromSequence, resolvedAt: null, resolvedAtSequence: null, lifecycleReviewedThroughSequence: null,
+    supersedesId: null, horizon: null, expiresAt: null,
     createdAt: new Date(0), updatedAt: new Date(0),
   };
 }
 
 function event(type: MarketEventRecord["type"], payload: Record<string, unknown>, sequence = 1): MarketEventRecord {
-  return { id: `event-${type}`, sequence, instrumentId: "NSE:TEST", type, eventTime: new Date(), receivedTime: new Date(), source: "test", quality: "FRESH", payload, correctionOfId: null };
+  return { id: `event-${type}`, sequence, instrumentId: "NSE:TEST", type, eventTime: new Date(), receivedTime: new Date(), source: "test", quality: "FRESH", payload, subjectType: null, subjectKey: null, tags: [], correctionOfId: null };
 }
 
 function matches(watchIntent: WatchIntentRecord, snapshots: MarketSnapshotRecord[] = [snapshot(0, 10000), snapshot(1, 10000)], events: MarketEventRecord[] = []) {

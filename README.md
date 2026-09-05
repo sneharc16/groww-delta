@@ -1,10 +1,10 @@
 # Groww Delta
 
-**The Living Watchlist** remembers which companies an investor follows, why they care, and what has changed since they last acknowledged the market. This repository contains Builds 1 and 2: the persistent watchlist foundation plus a deterministic, explainable Catch Up attention engine.
+**The Living Watchlist** remembers which companies an investor follows, why they care, what has changed since they last acknowledged the market, and which user-confirmed related drivers give that change context. This repository contains Builds 1–3.
 
 All prices, times, volumes, and events shown by the application are **simulated demo data**. They are not Groww or NSE live quotes and must not be used for trading decisions.
 
-## Current scope (Builds 1–2)
+## Current scope (Builds 1–3)
 
 - An engine-driven Catch Up screen, full watchlist, stock detail, Watch Intent editor/history, and demo controls
 - Five seeded NSE instruments for the deterministic scenario
@@ -17,17 +17,21 @@ All prices, times, volumes, and events shown by the application are **simulated 
 - Objective price, volume, and event significance with deterministic scoring and three attention lanes
 - Effective market sequences on intent versions, preventing new or edited reasons from reinterpreting older events
 - One derived, explainable attention item per instrument; no persisted attention truth
+- Versioned relational Watch Graphs with curated, explicitly confirmed driver relationships
+- Bounded contextual event matching with an explainable path of relevance
+- Living Watchlist lifecycle: resolution eligibility, keep watching, resolve, next-cycle renewal, stale review, and a state-derived history timeline
+- Persisted acknowledgement history alongside the current Knowledge Cursor
 - `MarketDataProvider` boundary with a database-backed `ReplayMarketProvider`
 - REST-style Next.js route handlers with Zod validation and consistent API errors
-- Unit, service, default-scenario integration tests, and four Playwright flows
+- Unit, service, default-scenario integration tests, and seven Playwright flows
 
-Build 2 does **not** implement semantic or graph-based inference, AI summaries, automatic acknowledgement, notifications, live market data, authentication, recommendations, or trading. See [Build 2](docs/BUILD2.md) for the exact boundary.
+Build 3 uses only curated deterministic relationships: it does **not** research or infer graphs, parse meaning with an LLM, make recommendations, auto-acknowledge updates, send notifications, or use live market data. See [Build 3](docs/BUILD3.md) for the exact boundary.
 
 ## Architecture
 
 The repository is one Next.js App Router application. Client components call route handlers; handlers validate input and delegate to application services; services own business rules; repositories own Prisma access. Market reads go through `MarketDataProvider`, never directly to replay fixtures from the UI.
 
-See [Architecture](docs/ARCHITECTURE.md), [Domain model](docs/DOMAIN_MODEL.md), [Decisions](docs/DECISIONS.md), [Build 1](docs/BUILD1.md), and [Build 2](docs/BUILD2.md).
+See [Architecture](docs/ARCHITECTURE.md), [Domain model](docs/DOMAIN_MODEL.md), [Decisions](docs/DECISIONS.md), [Build 1](docs/BUILD1.md), [Build 2](docs/BUILD2.md), and [Build 3](docs/BUILD3.md).
 
 ## Prerequisites
 
@@ -85,6 +89,12 @@ The Playwright suite covers Build 1 watchlist/intent behavior and Build 2 attent
 - `GET|POST /api/watch-intents`
 - `PATCH /api/watch-intents/:logicalIntentId`
 - `POST /api/watch-intents/:logicalIntentId/archive`
+- `GET|POST|PATCH /api/watch-intents/:logicalIntentId/graph`
+- `GET /api/watch-intents/:logicalIntentId/driver-suggestions`
+- `POST /api/watch-intents/:logicalIntentId/resolve`
+- `POST /api/watch-intents/:logicalIntentId/keep`
+- `POST /api/watch-intents/:logicalIntentId/renew`
+- `GET /api/watch-lifecycle?instrumentId=<id>`
 - `GET /api/demo/state`
 - `POST /api/demo/advance`
 - `POST /api/demo/reset`
@@ -95,4 +105,4 @@ The Playwright suite covers Build 1 watchlist/intent behavior and Build 2 attent
 
 ## Future market provider extension
 
-The provider contract lives at `src/server/market/providers/market-data-provider.ts`. A later live provider can implement that interface and be selected in the server composition root. It should not change UI, API, watch-intent, or attention-domain code. No live provider exists in Build 2.
+The provider contract lives at `src/server/market/providers/market-data-provider.ts`. A later live provider can implement that interface and be selected in the server composition root. It should not change UI, API, watch-intent, graph, or attention-domain code. No live provider exists in Build 3.

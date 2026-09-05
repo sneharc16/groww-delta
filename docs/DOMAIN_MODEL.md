@@ -36,7 +36,13 @@ A point-in-time observation for one instrument and replay sequence. All money us
 
 ## MarketEvent
 
-An immutable conceptual fact assigned to a deterministic sequence, with optional instrument, event/received times, source, quality, typed event name, JSON payload, and optional correction reference. Corrections are represented by new rows rather than mutation of the original fact.
+An immutable conceptual fact assigned to a deterministic sequence, with optional instrument, event/received times, source, quality, typed event name, JSON payload, normalized `subjectType`/`subjectKey`, tags, and optional correction reference. Subjects and tags create a generic graph-matching surface without replacing typed payload semantics.
+
+## WatchGraph, nodes, and edges
+
+A WatchGraph belongs to one logical Watch Intent and instrument. Like an intent, it has an immutable version chain, status, provenance, template key, and `effectiveFromSequence`. Editing relationships supersedes the prior graph and creates a new active version, so new relationships cannot reinterpret older events.
+
+Nodes use a small controlled type set (`INSTRUMENT`, `QUESTION`, `METRIC`, `DRIVER`, `EXTERNAL_DRIVER`, `EVENT_CATEGORY`, `PRICE_CONDITION`). Exactly one instrument root is required. Edges use six controlled relationship labels and an integer 0–100 relevance weight. Weights mean configured relevance strength, never causal probability. Traversal is capped at depth three and 25 visited nodes.
 
 ## KnowledgeCursor
 
@@ -46,8 +52,16 @@ The persisted knowledge baseline for one user/instrument pair: last seen sequenc
 
 Stores the active replay scenario, step, sequence, and simulated time. It is persisted independently of browser state, so refreshing does not reset the replay. Advance and reset update this row through `DemoMarketService`.
 
+## KnowledgeAcknowledgement
+
+An append-only acknowledgement record captures one instrument's prior and resulting sequence, whether it came from an individual or watchlist command, and its acknowledgement time. It supports the watch timeline but never replaces the cursor's role as current knowledge state.
+
 ## AttentionItem
 
 A Build 2 AttentionItem is derived, not persisted. It aggregates at most one consumer card per active instrument for the window after that instrument's Knowledge Cursor through the current market sequence. It contains baseline/current state, price and volume measurements, material events, direct intent matches, reason codes, confidence, internal score, and a `RELEVANT`, `SIGNIFICANT`, or `QUIET` lane.
 
-Relevance and significance are intentionally separate. Relevance is 100 only for a direct structured intent match. Objective significance combines price surprise, relative volume, and deterministic event severity. Acknowledgement changes the cursor window, so already-known information falls out naturally without deleting market facts.
+Relevance and significance are intentionally separate. Direct structured matches score relevance 100. If no direct match exists, a fresh/delayed event may match a confirmed graph path; path relevance is the product of edge weights and must be at least 50. The strongest path drives the consumer explanation while all matches remain attached to their logical intents. Objective significance remains independent.
+
+## Watch Intent lifecycle
+
+Resolvable structured intents become `RESOLUTION_ELIGIBLE` only after a matching event/transition occurred and the Knowledge Cursor crossed it. The user may keep watching, change, or resolve; nothing is auto-archived and the watchlist item remains. Results/dividend reasons may renew as a new active version. Expiry and acknowledged event age can create a calm `STALE_CANDIDATE` review suggestion. The watch timeline is derived from intent/graph versions, market events, acknowledgements, and resolution fields.
