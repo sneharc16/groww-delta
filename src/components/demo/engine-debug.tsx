@@ -8,9 +8,10 @@ export function EngineDebug({ catchUp }: { catchUp: CatchUpDto }) {
   return (
     <details className="card engine-debug">
       <summary><span><strong>ENGINE DEBUG</strong><small>Deterministic analysis facts</small></span><span>View</span></summary>
+      <p>Provider: {catchUp.providerHealth.status} · Calm Mode: {catchUp.marketContext?.calmModeActive ? "active" : "inactive"}</p>
       <div className="debug-table-wrap">
         <table className="debug-table">
-          <thead><tr><th>Instrument</th><th>Cursor / current</th><th>Δ bps</th><th>Expected bps</th><th>Surprise</th><th>Volume</th><th>S / R / N / U / C</th><th>Score</th><th>Lane</th><th>Match facts</th><th>Reason codes</th></tr></thead>
+          <thead><tr><th>Instrument</th><th>Cursor / current</th><th>Δ bps</th><th>Expected bps</th><th>Surprise</th><th>Volume</th><th>S / R / N / U / C</th><th>Score</th><th>Lane</th><th>Trust / trusted baseline / residual</th><th>Match facts</th><th>Reason codes</th></tr></thead>
           <tbody>{items.map((item) => (
             <tr key={item.instrument.id} data-testid={`debug-${item.instrument.symbol}`}>
               <th>{item.instrument.symbol}</th>
@@ -22,6 +23,7 @@ export function EngineDebug({ catchUp }: { catchUp: CatchUpDto }) {
               <td>{item.significance} / {item.relevance} / {item.novelty} / {item.urgency} / {item.confidence}</td>
               <td>{item.score}</td>
               <td>{item.lane}</td>
+              <td>{item.trust.quality} · {item.trustedBaselineSnapshotId ?? "—"} · {number(item.marketAdjustedDeltaBps)} bps · {item.trustNotices.flatMap((notice) => notice.reasonCodes).join(", ")}<br />{item.conditionAssessments.map((condition) => `Candidate: ${condition.conditionCandidate}; confirmed: ${condition.conditionConfirmed}; ${condition.reasonCodes.join(", ")}`).join(" | ")}</td>
               <td>{item.matchedIntents.map((match) => match.graphMatch
                 ? `${match.matchType}: ${match.graphMatch.eventSubjectKey} → ${match.graphMatch.matchedNodeKey}; ${match.graphMatch.path.map((node) => node.label).join(" → ")}; depth ${match.graphMatch.pathDepth}; weight ${match.graphMatch.relevance}; effective ${match.graphMatch.effectiveSequence}`
                 : `${match.matchType}: ${match.reasonCode}`).join(" | ") || "—"}</td>

@@ -173,3 +173,57 @@
 **Decision:** Persist one per-instrument acknowledgement row for both individual and mark-all commands.
 
 **Reason:** Cursor state remains compact and monotonic while timeline/audit views retain action history without duplicating watchlist-wide entries.
+
+## Build 4 decisions
+
+### ADR-030: Keep GET side-effect free; make acknowledgement atomic
+
+Cursor conditional update, version increment and immutable history insertion commit together. Stale/equal requests write nothing. Locks and rollback protect coherence; reads never acknowledge.
+
+### ADR-031: Trust Notices are separate from market attention
+
+Data integrity is an awareness problem, not a RELEVANT/SIGNIFICANT market signal. Notices precede market context and attention lanes.
+
+### ADR-032: Untrusted snapshots cannot mutate condition state
+
+Skip stale/conflicting snapshots; delayed price confirmation needs receipt delay ≤60 seconds. Subsequent fresh data compares to the last trusted condition state.
+
+### ADR-033: Corrections append, never overwrite
+
+Use same semantic event type plus correctionOfId and CORRECTED quality. Suppress superseded interpretation if unseen; explicitly notify if an ancestor was seen.
+
+### ADR-034: Corporate actions request review
+
+Mechanical splits do not count as price-condition transitions. Derive integer-paise adjustment server-side; only explicit acceptance creates a new intent version.
+
+### ADR-035: Calm Mode groups rather than hides
+
+Use broad benchmark/breadth thresholds and progressive disclosure. All grouped data remains accessible.
+
+### ADR-036: Explicit intent survives broad noise
+
+Calm Mode changes only generic objective price significance, not price conditions, volume, event/direct or contextual relevance.
+
+### ADR-037: Transparent beta=1 prototype residual
+
+Stock delta minus benchmark delta is understandable and deterministic, not a production factor estimate. Future sector/beta refinement is documentation only.
+
+### ADR-038: Sequence and event time have different meanings
+
+Ingestion sequence defines novelty, including late events. Actual event time drives occurrence labels. Real user action timestamps remain real timestamps.
+
+### ADR-039: Stable event identities are idempotent
+
+Deduplicate identical content by ID and normalize deterministic ordering. Conflicting immutable content under one ID fails with an integrity error, never silent selection.
+
+### ADR-040: Preserve canonical fixtures with a scenario registry
+
+Four explicit scenario IDs prevent resilience demos from corrupting canonical market behavior. Scenario paths are not accepted from clients.
+
+### ADR-041: Explicit replay namespaces
+
+Scenario ID plus generation isolate demo resets/switches. Retained configuration is adopted at a new baseline without rewriting historical intent/graph versions. Acknowledgements and corporate reviews retain their original namespace.
+
+### ADR-042: Honest trust vocabulary
+
+Use Current / Delayed / Unreliable / Corrected, never claims of official verification. Build 4 consumes resolved quality from the provider and does not implement reconciliation infrastructure.

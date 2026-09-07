@@ -11,6 +11,7 @@ import { DemoBadge, ErrorState, LoadingState } from "@/components/ui/status";
 import { EngineDebug } from "./engine-debug";
 
 export function DemoScreen() {
+  const [scenarios, setScenarios] = useState<Array<{ id: string; name: string }>>([]);
   const [state, setState] = useState<DemoStateDto | null>(null);
   const [watchlist, setWatchlist] = useState<WatchlistDto | null>(null);
   const [catchUp, setCatchUp] = useState<CatchUpDto | null>(null);
@@ -21,6 +22,8 @@ export function DemoScreen() {
   const load = useCallback(async () => {
     try {
       const [demoState, watchlistData, catchUpData] = await Promise.all([apiFetch<DemoStateDto>("/api/demo/state"), apiFetch<WatchlistDto>("/api/watchlist"), apiFetch<CatchUpDto>("/api/catch-up")]);
+      setScenarios((await apiFetch<{ scenarios: Array<{ id: string; name: string }> }>("/api/demo/scenarios")).scenarios);
+      setError(null);
       setState(demoState);
       setWatchlist(watchlistData);
       setCatchUp(catchUpData);
@@ -39,6 +42,15 @@ export function DemoScreen() {
       await load();
       setMessage(result.message ?? (action === "advance" ? "The simulated market advanced by 30 minutes." : "Scenario reset to the starting point."));
     } catch (caught: unknown) { setError(caught instanceof Error ? caught.message : "Could not update the demo."); }
+    finally { setBusy(false); }
+  }
+
+  async function configure(kind: "scenario" | "provider", value: string) {
+    setBusy(true);
+    try {
+      await apiFetch(`/api/demo/${kind}`, { method: "POST", body: JSON.stringify(kind === "scenario" ? { scenarioId: value } : { status: value }) });
+      await load();
+    } catch (caught: unknown) { setError(caught instanceof Error ? caught.message : "Could not change demo controls."); }
     finally { setBusy(false); }
   }
 
@@ -68,6 +80,8 @@ export function DemoScreen() {
         </section>
         <aside className="card section-card">
           <div className="section-title"><h2>Scenario</h2></div>
+          <label className="form-field">Demo scenario<select aria-label="Demo scenario" value={state.scenario.id} disabled={busy} onChange={(event) => void configure("scenario", event.target.value)}>{scenarios.map((scenario) => <option key={scenario.id} value={scenario.id}>{scenario.name}</option>)}</select></label>
+          <label className="form-field">Provider status<select aria-label="Provider status" value={catchUp.providerHealth.status} disabled={busy} onChange={(event) => void configure("provider", event.target.value)}><option value="HEALTHY">Healthy</option><option value="DEGRADED">Degraded</option><option value="UNAVAILABLE">Unavailable</option></select></label>
           <dl className="detail-list"><div><dt>Name</dt><dd>{state.scenario.name}</dd></div><div><dt>ID</dt><dd>{state.scenario.id}</dd></div><div><dt>Sequence</dt><dd>{state.currentSequence}</dd></div></dl>
         </aside>
       </div>
@@ -77,7 +91,7 @@ export function DemoScreen() {
           {watchlist.items.map((item) => <div key={item.id}><span><strong>{item.instrument.symbol}</strong><small>{item.instrument.name}</small></span><strong data-testid={`demo-price-${item.instrument.symbol}`}>{item.snapshot ? formatINRFromPaise(item.snapshot.pricePaise) : "—"}</strong></div>)}
         </div>
       </section>
-      <section className="card section-card upcoming-card">
+      {state.scenario.id === "groww-delta-default" ? <section className="card section-card upcoming-card">
         <div className="section-title"><div><h2>Demo walkthrough</h2><p>Expected qualitative behavior from deterministic market inputs</p></div></div>
         <ol className="walkthrough-list">
           <li className={state.currentStep === 0 ? "current" : ""}><strong>Step 0 · Baseline</strong><span>The user starts caught up.</span></li>
@@ -88,6 +102,7 @@ export function DemoScreen() {
         </ol>
         <details><summary>Upcoming simulated events</summary><p>Future event detail is not revealed by default. Events become available to the engine only at their assigned sequence.</p></details>
       </section>
+      : <section className="card section-card"><h2>Resilience walkthrough</h2><p>Advance the selected scenario and inspect its data status, attention, and trust notices in Catch Up.</p></section>}
       <EngineDebug catchUp={catchUp} />
     </>
   );

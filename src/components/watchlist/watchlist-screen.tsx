@@ -63,7 +63,7 @@ export function WatchlistScreen() {
       setAddOpen(false);
       setToast("Added to watchlist");
       setEditing({
-        item: { id: "", addedAt: "", provenanceSource: "MANUAL", provenanceReference: null, instrument, snapshot: null, activeIntents: [] },
+        item: { id: "", addedAt: "", provenanceSource: "MANUAL", provenanceReference: null, instrument, snapshot: null, dataTrust: null, activeIntents: [] },
         intent: null,
       });
     } catch (caught: unknown) {

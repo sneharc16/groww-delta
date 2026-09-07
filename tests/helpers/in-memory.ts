@@ -75,30 +75,40 @@ export class MemoryIntentRepository implements WatchIntentRepository {
 }
 
 export class MemoryDemoSessionRepository implements DemoSessionRepository {
+  resetBaselines?: (userId: string, baselines: CursorBaselineInput[]) => Promise<void>;
   constructor(public state: DemoStateRecord = {
     id: "default-demo-session", scenarioId: "groww-delta-default", currentStep: 0, currentSequence: 0,
     currentTime: new Date("2025-08-14T04:30:00.000Z"),
   }) {}
   async getById(id: string) { return id === this.state.id ? { ...this.state } : null; }
+  async resetScenario(_id: string, scenarioId: string, time: Date, userId: string, baselines: CursorBaselineInput[]) {
+    await this.resetBaselines?.(userId, baselines);
+    this.state = { ...this.state, scenarioId, currentStep: 0, currentSequence: 0, currentTime: time, providerStatus: "HEALTHY", lastHealthySequence: 0, generation: (this.state.generation ?? 0) + 1 };
+    return { ...this.state };
+  }
+  async setProviderStatus(_id: string, providerStatus: "HEALTHY" | "DEGRADED" | "UNAVAILABLE") {
+    this.state = { ...this.state, providerStatus, lastHealthySequence: providerStatus === "UNAVAILABLE" ? this.state.lastHealthySequence ?? this.state.currentSequence : this.state.currentSequence };
+    return { ...this.state };
+  }
   async setPosition(id: string, currentStep: number, currentSequence: number, currentTime: Date) {
     if (id !== this.state.id) throw new Error("missing session");
-    this.state = { ...this.state, currentStep, currentSequence, currentTime }; return { ...this.state };
+    this.state = { ...this.state, currentStep, currentSequence, currentTime, ...(this.state.providerStatus === "UNAVAILABLE" ? {} : { lastHealthySequence: currentSequence }) }; return { ...this.state };
   }
 }
 
 export class MemorySnapshotRepository implements MarketSnapshotRepository {
   constructor(public rows: MarketSnapshotRecord[]) {}
-  async findCurrent(instrumentId: string, sequence: number) { return this.rows.filter((row) => row.instrumentId === instrumentId && row.sequence <= sequence).sort((a, b) => b.sequence - a.sequence)[0] ?? null; }
-  async findCurrentMany(ids: string[], sequence: number) {
-    return (await Promise.all(ids.map((id) => this.findCurrent(id, sequence)))).filter((row): row is MarketSnapshotRecord => row !== null);
+  async findCurrent(instrumentId: string, sequence: number, scenarioId = "groww-delta-default") { return this.rows.filter((row) => row.instrumentId === instrumentId && (row.scenarioId ?? "groww-delta-default") === scenarioId && row.sequence <= sequence).sort((a, b) => b.sequence - a.sequence)[0] ?? null; }
+  async findCurrentMany(ids: string[], sequence: number, scenarioId = "groww-delta-default") {
+    return (await Promise.all(ids.map((id) => this.findCurrent(id, sequence, scenarioId)))).filter((row): row is MarketSnapshotRecord => row !== null);
   }
-  async listThroughSequence(instrumentId: string, sequence: number) { return this.rows.filter((row) => row.instrumentId === instrumentId && row.sequence <= sequence).sort((a, b) => a.sequence - b.sequence); }
-  async listForInstrumentsThrough(instrumentIds: string[], sequence: number) { return this.rows.filter((row) => instrumentIds.includes(row.instrumentId) && row.sequence <= sequence).sort((a, b) => a.instrumentId.localeCompare(b.instrumentId) || a.sequence - b.sequence); }
+  async listThroughSequence(instrumentId: string, sequence: number, scenarioId = "groww-delta-default") { return this.rows.filter((row) => row.instrumentId === instrumentId && (row.scenarioId ?? "groww-delta-default") === scenarioId && row.sequence <= sequence).sort((a, b) => a.sequence - b.sequence); }
+  async listForInstrumentsThrough(instrumentIds: string[], sequence: number, scenarioId = "groww-delta-default") { return this.rows.filter((row) => instrumentIds.includes(row.instrumentId) && (row.scenarioId ?? "groww-delta-default") === scenarioId && row.sequence <= sequence).sort((a, b) => a.instrumentId.localeCompare(b.instrumentId) || a.sequence - b.sequence); }
 }
 
 export class MemoryEventRepository implements MarketEventRepository {
   constructor(public rows: MarketEventRecord[]) {}
-  async listBetweenSequences(start: number, end: number) { return this.rows.filter((row) => row.sequence > start && row.sequence <= end); }
+  async listBetweenSequences(start: number, end: number, scenarioId = "groww-delta-default") { return this.rows.filter((row) => (row.scenarioId ?? "groww-delta-default") === scenarioId && row.sequence > start && row.sequence <= end); }
 }
 
 export class MemoryWatchlistRepository implements WatchlistRepository {
@@ -132,6 +142,21 @@ export function cursorRecord(input: Partial<KnowledgeCursorRecord> = {}): Knowle
 }
 
 export class MemoryKnowledgeCursorRepository implements KnowledgeCursorRepository {
+  acknowledgements: KnowledgeAcknowledgementRecord[] = [];
+  failAcknowledgement = false;
+  async acknowledgeMany(userId: string, inputs: CursorBaselineInput[], scope: "INSTRUMENT" | "WATCHLIST") {
+    if (this.failAcknowledgement) throw new Error("Simulated acknowledgement insert failure");
+    const current = inputs.map((input) => this.rows.find((row) => row.userId === userId && row.instrumentId === input.instrumentId));
+    if (current.some((row) => !row)) throw new Error("Missing cursor");
+    return inputs.map((input, index) => {
+      const row = current[index]!;
+      if (row.lastSeenSequence < input.sequence) {
+        this.acknowledgements.push({ id: `ack-${this.acknowledgements.length + 1}`, userId, instrumentId: input.instrumentId, fromSequence: row.lastSeenSequence, throughSequence: input.sequence, scope, acknowledgedAt: new Date() });
+        Object.assign(row, { lastSeenSequence: input.sequence, lastSeenEventTime: input.eventTime, lastObservedSnapshotId: input.snapshotId, cursorVersion: row.cursorVersion + 1 });
+      }
+      return { ...row };
+    });
+  }
   constructor(public rows: KnowledgeCursorRecord[] = []) {}
 
   async listForInstruments(userId: string, instrumentIds: string[]) {

@@ -25,6 +25,9 @@ export interface AttentionEventSummary {
   id: string;
   type: MarketEventRecord["type"];
   eventTime: Date;
+  receivedTime: Date;
+  source: string;
+  correctionOfId: string | null;
   quality: MarketQuality;
   payload: unknown;
   subjectKey: string | null;
@@ -42,6 +45,13 @@ export interface AttentionDisplay {
 }
 
 export interface AttentionItem {
+  conditionAssessments: import("@/domain/trust/price-conditions").PriceConditionAssessment[];
+  lastConfirmedSnapshot: MarketSnapshotRecord | null;
+  trust: import("@/domain/trust/types").DataTrust;
+  trustNotices: import("@/domain/trust/types").TrustNotice[];
+  trustedBaselineSnapshotId: string | null;
+  marketAdjustedDeltaBps: number | null;
+  groupedMarketMove: boolean;
   instrument: InstrumentRecord;
   fromSequence: number;
   toSequence: number;
@@ -74,6 +84,11 @@ export interface AttentionItem {
 }
 
 export interface AttentionAnalysisInput {
+  demoTimeTravel?: boolean;
+  providerHealth?: import("@/domain/trust/types").MarketProviderHealth;
+  marketContext?: import("@/domain/market/context").MarketContext | null;
+  benchmarkDeltaBps?: number;
+  corporateDecisions?: import("@/domain/trust/types").CorporateActionReviewRecord[];
   instrument: InstrumentRecord;
   cursor: KnowledgeCursorRecord;
   currentSequence: number;

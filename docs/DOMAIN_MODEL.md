@@ -32,7 +32,7 @@ Supported types are `PRICE_LEVEL`, `EARNINGS`, `DIVIDEND`, `TECHNICAL`, `COMPANY
 
 ## MarketSnapshot
 
-A point-in-time observation for one instrument and replay sequence. All money uses integer paise. It stores price, OHLC, cumulative/expected cumulative volume, simulated expected one-step movement in basis points, event time, source, and quality. `(instrumentId, sequence)` is unique. Expected movement is fixture metadata used to normalize price changes over a multi-step window with `sqrt(sum(stepMove²))`; it is not real volatility data.
+A point-in-time observation for one instrument and replay sequence. All money uses integer paise. It stores price, OHLC, cumulative/expected cumulative volume, simulated expected one-step movement in basis points, event time, source, and quality. `(scenarioId, instrumentId, sequence)` is unique. Expected movement is fixture metadata used to normalize price changes over a multi-step window with `sqrt(sum(stepMove²))`; it is not real volatility data.
 
 ## MarketEvent
 
@@ -58,10 +58,25 @@ An append-only acknowledgement record captures one instrument's prior and result
 
 ## AttentionItem
 
-A Build 2 AttentionItem is derived, not persisted. It aggregates at most one consumer card per active instrument for the window after that instrument's Knowledge Cursor through the current market sequence. It contains baseline/current state, price and volume measurements, material events, direct intent matches, reason codes, confidence, internal score, and a `RELEVANT`, `SIGNIFICANT`, or `QUIET` lane.
+An AttentionItem is derived, not persisted. It aggregates at most one consumer card per active instrument for the window after that instrument's Knowledge Cursor through the current market sequence. It contains baseline/current state, price and volume measurements, material events, direct intent matches, reason codes, confidence, internal score, and a `RELEVANT`, `SIGNIFICANT`, or `QUIET` lane.
 
 Relevance and significance are intentionally separate. Direct structured matches score relevance 100. If no direct match exists, a fresh/delayed event may match a confirmed graph path; path relevance is the product of edge weights and must be at least 50. The strongest path drives the consumer explanation while all matches remain attached to their logical intents. Objective significance remains independent.
 
 ## Watch Intent lifecycle
 
 Resolvable structured intents become `RESOLUTION_ELIGIBLE` only after a matching event/transition occurred and the Knowledge Cursor crossed it. The user may keep watching, change, or resolve; nothing is auto-archived and the watchlist item remains. Results/dividend reasons may renew as a new active version. Expiry and acknowledged event age can create a calm `STALE_CANDIDATE` review suggestion. The watch timeline is derived from intent/graph versions, market events, acknowledgements, and resolution fields.
+
+## Build 4 extensions
+
+- **Instrument:** kind EQUITY/INDEX and isWatchlistEligible. Nifty 50 is benchmark context, not an addable stock.
+- **MarketSnapshot:** scenarioId and receivedTime; quality/freshness stays provider-resolved. Money remains integer paise.
+- **MarketEvent:** scenarioId and append-only correction chains using existing correctionOfId. Sequence means discovery/ingestion ordering; eventTime remains actual occurrence.
+- **Intent / graph:** effectiveScenarioId and effectiveDemoGeneration scope effectiveFromSequence to an explicit replay run. Stored historical versions never change when the demo rewinds.
+- **DemoSession:** generation, providerStatus, lastHealthySequence support atomic scenario baselines and last-available-data reads.
+- **KnowledgeAcknowledgement:** scenarioId and demoGeneration separate immutable action history from later time-travel resets. Successful advancement/history writes are atomic.
+- **CorporateActionReview:** user/logical intent/event/run identity, decision, original and adjusted targets, resulting intent ID and decision timestamp. Adjustment appends a new intent version.
+- **TrustNotice:** derived awareness/review object separate from attention lanes, with type, severity, human copy, structured reasons and source/time/action metadata.
+- **MarketContext:** derived benchmark delta, breadth, median movement, Calm Mode and grouped count. No new persisted market truth.
+- **AttentionItem:** trust metadata, trusted baseline reference, market-relative delta and grouped state extend the existing single analysis result. Formula and direct/graph semantics remain intact.
+
+Demo namespace rebasing is explicit orchestration only. Within an uninterrupted run new intent/graph versions cannot interpret prior events. Between runs retained user configuration begins at the new baseline; old acknowledgement records remain stored but do not become assertions about the new run.

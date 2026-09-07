@@ -42,6 +42,8 @@ export interface CreateIntentRecordInput extends WatchIntentDraft {
   instrumentId: string;
   version: number;
   effectiveFromSequence: number;
+  effectiveScenarioId?: string;
+  effectiveDemoGeneration?: number;
   supersedesId: string | null;
 }
 
@@ -61,20 +63,24 @@ export interface WatchIntentRepository {
 export interface DemoSessionRepository {
   getById(id: string): Promise<DemoStateRecord | null>;
   setPosition(id: string, step: number, sequence: number, time: Date): Promise<DemoStateRecord>;
+  resetScenario(id: string, scenarioId: string, time: Date, userId: string, baselines: CursorBaselineInput[]): Promise<DemoStateRecord>;
+  setProviderStatus(id: string, status: "HEALTHY" | "DEGRADED" | "UNAVAILABLE"): Promise<DemoStateRecord>;
 }
 
 export interface MarketSnapshotRepository {
-  findCurrent(instrumentId: string, currentSequence: number): Promise<MarketSnapshotRecord | null>;
-  findCurrentMany(instrumentIds: string[], currentSequence: number): Promise<MarketSnapshotRecord[]>;
-  listThroughSequence(instrumentId: string, currentSequence: number): Promise<MarketSnapshotRecord[]>;
-  listForInstrumentsThrough(instrumentIds: string[], currentSequence: number): Promise<MarketSnapshotRecord[]>;
+  findCurrent(instrumentId: string, currentSequence: number, scenarioId?: string): Promise<MarketSnapshotRecord | null>;
+  findCurrentMany(instrumentIds: string[], currentSequence: number, scenarioId?: string): Promise<MarketSnapshotRecord[]>;
+  listThroughSequence(instrumentId: string, currentSequence: number, scenarioId?: string): Promise<MarketSnapshotRecord[]>;
+  listForInstrumentsThrough(instrumentIds: string[], currentSequence: number, scenarioId?: string): Promise<MarketSnapshotRecord[]>;
 }
 
 export interface MarketEventRepository {
-  listBetweenSequences(exclusiveStart: number, inclusiveEnd: number): Promise<MarketEventRecord[]>;
+  listBetweenSequences(exclusiveStart: number, inclusiveEnd: number, scenarioId?: string): Promise<MarketEventRecord[]>;
 }
 
 export interface CursorBaselineInput {
+  expectedScenarioId?: string;
+  expectedGeneration?: number;
   instrumentId: string;
   sequence: number;
   eventTime: Date;
@@ -85,6 +91,7 @@ export interface KnowledgeCursorRepository {
   listForInstruments(userId: string, instrumentIds: string[]): Promise<KnowledgeCursorRecord[]>;
   setBaseline(userId: string, input: CursorBaselineInput): Promise<KnowledgeCursorRecord>;
   advanceMonotonic(userId: string, input: CursorBaselineInput): Promise<KnowledgeCursorRecord | null>;
+  acknowledgeMany(userId: string, inputs: CursorBaselineInput[], scope: "INSTRUMENT" | "WATCHLIST"): Promise<KnowledgeCursorRecord[]>;
   resetMany(userId: string, inputs: CursorBaselineInput[]): Promise<KnowledgeCursorRecord[]>;
 }
 
@@ -101,6 +108,8 @@ export interface KnowledgeAcknowledgementRepository {
 }
 
 export interface CreateWatchGraphInput {
+  effectiveScenarioId?: string;
+  effectiveDemoGeneration?: number;
   id: string;
   logicalGraphId: string;
   userId: string;
@@ -121,4 +130,9 @@ export interface WatchGraphRepository {
   findActive(userId: string, logicalIntentId: string): Promise<WatchGraphRecord | null>;
   createVersion(previousId: string | null, input: CreateWatchGraphInput): Promise<WatchGraphRecord>;
   archiveActiveForIntent(userId: string, logicalIntentId: string): Promise<number>;
+}
+
+export interface CorporateActionReviewRepository {
+  list(userId: string, scenarioId: string, demoGeneration?: number): Promise<import("@/domain/trust/types").CorporateActionReviewRecord[]>;
+  decide(input: Omit<import("@/domain/trust/types").CorporateActionReviewRecord, "id" | "decidedAt">, previousIntentId: string, nextIntent?: CreateIntentRecordInput): Promise<import("@/domain/trust/types").CorporateActionReviewRecord>;
 }

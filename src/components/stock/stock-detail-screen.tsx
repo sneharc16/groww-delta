@@ -12,6 +12,8 @@ import { IntentEditor } from "@/components/intent/intent-editor";
 import { IntentList } from "@/components/intent/intent-list";
 import { Button } from "@/components/ui/button";
 import { RelatedDrivers } from "@/components/intent/related-drivers";
+import { TrustNotices } from "@/components/market/trust-notices";
+import type { TrustNotice } from "@/domain/trust/types";
 import { WatchLifecycle } from "@/components/intent/watch-lifecycle";
 
 export function StockDetailScreen({ symbol }: { symbol: string }) {
@@ -20,6 +22,7 @@ export function StockDetailScreen({ symbol }: { symbol: string }) {
   const [demo, setDemo] = useState<DemoStateDto | null>(null);
   const [attention, setAttention] = useState<AttentionItemDto | null>(null);
   const [lifecycle, setLifecycle] = useState<WatchLifecycleDto>({ lifecycle: [], timeline: [] });
+  const [trustNotices, setTrustNotices] = useState<TrustNotice[]>([]);
   const [editing, setEditing] = useState<WatchIntentDto | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -29,6 +32,8 @@ export function StockDetailScreen({ symbol }: { symbol: string }) {
       const [watchlist, demoState, catchUp] = await Promise.all([apiFetch<WatchlistDto>("/api/watchlist"), apiFetch<DemoStateDto>("/api/demo/state"), apiFetch<CatchUpDto>("/api/catch-up")]);
       const found = watchlist.items.find((row) => row.instrument.symbol === symbol.toUpperCase());
       if (!found) throw new Error("This instrument is not in the active watchlist.");
+      setError(null);
+      setTrustNotices(catchUp.trustNotices.filter((notice) => notice.instrumentId === found.instrument.id || notice.instrumentId === null));
       setItem(found);
       setDemo(demoState);
       setAttention([...catchUp.relevant, ...catchUp.significant, ...catchUp.quiet].find((candidate) => candidate.instrument.id === found.instrument.id) ?? null);
@@ -79,9 +84,6 @@ export function StockDetailScreen({ symbol }: { symbol: string }) {
   }
 
   async function lifecycleAction(action: "resolve" | "keep" | "renew", logicalIntentId: string) {
-    if (action === "renew" && intents.some((intent) => intent.logicalIntentId === logicalIntentId && intent.status === "ACTIVE")) {
-      await apiFetch(`/api/watch-intents/${logicalIntentId}/resolve`, { method: "POST" });
-    }
     await apiFetch(`/api/watch-intents/${logicalIntentId}/${action}`, {
       method: "POST",
       ...(action === "renew" ? { body: JSON.stringify({}) } : {}),
@@ -104,6 +106,8 @@ export function StockDetailScreen({ symbol }: { symbol: string }) {
         <div><div className="symbol-line"><h1>{item.instrument.symbol}</h1><span>{item.instrument.exchange}</span></div><p>{item.instrument.name}</p><DemoBadge /></div>
         {snapshot ? <Price pricePaise={snapshot.pricePaise} changePercent={snapshot.dayChangePercent} large /> : null}
       </div>
+      <TrustNotices notices={trustNotices} throughSequence={demo?.currentSequence ?? 0} onChanged={load} />
+      {attention ? <p className="data-status" data-testid="stock-data-status">{attention.trust.label} · observed {formatISTTime(attention.trust.eventTime)} IST · {attention.trust.source}</p> : null}
       <div className="two-column">
         <div className="stack">
           <section className={`card section-card since-card ${hasAttention ? "since-card-new" : ""}`} data-testid="stock-since-section">

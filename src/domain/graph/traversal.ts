@@ -1,12 +1,23 @@
 import type { WatchIntentRecord } from "@/domain/intent/types";
 import type { MarketEventRecord } from "@/domain/market/types";
 import type { GraphMatch, RelevancePathNode, WatchGraphRecord } from "./types";
-import { GraphDomainError, MAX_GRAPH_DEPTH, MAX_GRAPH_VISITED_NODES } from "./validation";
+import { GraphDomainError, MAX_GRAPH_DEPTH, MAX_GRAPH_VISITED_NODES, validateGraphDraft } from "./validation";
 
 export const MIN_GRAPH_RELEVANCE = 50;
 const blockedQualities = new Set(["STALE", "CONFLICTING"]);
 
 function pathsToTargets(graph: WatchGraphRecord, targetKeys: Set<string>): Array<{ path: RelevancePathNode[]; weight: number }> {
+  if (graph.nodes.length > MAX_GRAPH_VISITED_NODES) throw new GraphDomainError("GRAPH_VISITED_NODE_LIMIT", "Graph exceeds the visited-node limit.");
+  if (new Set(graph.nodes.map((node) => node.id)).size !== graph.nodes.length) throw new GraphDomainError("DUPLICATE_GRAPH_NODE", "Graph node IDs must be unique.");
+  const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
+  validateGraphDraft({
+    nodes: graph.nodes.map(({ nodeKey, type, label }) => ({ nodeKey, type, label })),
+    edges: graph.edges.map((edge) => ({
+      fromKey: nodesById.get(edge.fromNodeId)?.nodeKey ?? "",
+      toKey: nodesById.get(edge.toNodeId)?.nodeKey ?? "",
+      relationship: edge.relationship, weight: edge.weight,
+    })),
+  }, graph.instrumentId);
   const roots = graph.nodes.filter((node) => node.type === "INSTRUMENT");
   if (roots.length !== 1) throw new GraphDomainError("GRAPH_ROOT_REQUIRED", "A watch graph must contain exactly one instrument root.");
   const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
@@ -51,9 +62,10 @@ export function matchGraphEvents(input: {
   events: MarketEventRecord[];
   cursorSequence: number;
   currentSequence: number;
+  demoTimeTravel?: boolean;
 }): GraphMatch[] {
-  const graphEffective = Math.min(input.graph.effectiveFromSequence, input.currentSequence);
-  const intentEffective = Math.min(input.intent.effectiveFromSequence, input.currentSequence);
+  const graphEffective = input.demoTimeTravel ? Math.min(input.graph.effectiveFromSequence, input.currentSequence) : input.graph.effectiveFromSequence;
+  const intentEffective = input.demoTimeTravel ? Math.min(input.intent.effectiveFromSequence, input.currentSequence) : input.intent.effectiveFromSequence;
   const effectiveSequence = Math.max(input.cursorSequence, graphEffective, intentEffective);
   if (input.graph.status !== "ACTIVE" || input.currentSequence <= effectiveSequence) return [];
   const nodeKeys = new Set(input.graph.nodes.map((node) => node.nodeKey));

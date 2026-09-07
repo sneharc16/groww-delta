@@ -19,4 +19,4 @@ export const ATTENTION_REASON_CODES = [
   "DATA_DELAYED",
 ] as const;
 
-export type AttentionReasonCode = (typeof ATTENTION_REASON_CODES)[number];
+export type AttentionReasonCode = import("@/domain/trust/types").TrustReasonCode | (typeof ATTENTION_REASON_CODES)[number];

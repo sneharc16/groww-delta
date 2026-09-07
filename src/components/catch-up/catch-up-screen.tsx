@@ -8,6 +8,8 @@ import { apiFetch } from "@/lib/api/client";
 import { formatISTTime } from "@/lib/format/market";
 import { Button } from "@/components/ui/button";
 import { DemoBadge, ErrorState, LoadingState } from "@/components/ui/status";
+import { TrustNotices } from "@/components/market/trust-notices";
+import { MarketContextPanel } from "@/components/market/market-context";
 import { AttentionCard } from "./attention-card";
 
 export function CatchUpScreen() {
@@ -45,7 +47,6 @@ export function CatchUpScreen() {
   async function reviewAction(action: "resolve" | "keep" | "renew", logicalIntentId: string) {
     setBusy(logicalIntentId); setMessage(null);
     try {
-      if (action === "renew") await apiFetch(`/api/watch-intents/${logicalIntentId}/resolve`, { method: "POST" });
       await apiFetch(`/api/watch-intents/${logicalIntentId}/${action}`, {
         method: "POST",
         ...(action === "renew" ? { body: JSON.stringify({}) } : {}),
@@ -68,6 +69,8 @@ export function CatchUpScreen() {
   return (
     <>
       <div className="page-heading"><div><p className="eyebrow">The Living Watchlist</p><h1>Catch Up</h1><p>{sinceLabel}</p></div><DemoBadge /></div>
+      <TrustNotices notices={data.trustNotices} throughSequence={data.asOfSequence} onChanged={load} />
+      <MarketContextPanel context={data.marketContext} grouped={data.groupedMarketMoves} />
       {attentionCount === 0 ? (
         <section className="baseline-card card" data-testid="caught-up-state">
           <div className="baseline-icon"><Clock3 size={22} /></div>

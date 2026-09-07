@@ -56,12 +56,12 @@ function scenario() {
   const watchlists = new MemoryWatchlistRepository(watchlistRecord(watchlistItems));
   const intents = new MemoryIntentRepository(seededIntents.map((intent) => ({ ...intent })));
   const provider = new ReplayMarketProvider(sessions, new MemorySnapshotRepository(snapshots), new MemoryEventRepository(events));
-  const acknowledgements = new MemoryKnowledgeAcknowledgementRepository();
+  const acknowledgements = new MemoryKnowledgeAcknowledgementRepository(cursors.acknowledgements);
   const indigoTemplate = findDriverTemplate("AIRLINE_FUEL_COST", "NSE:INDIGO");
   const graphs = new MemoryWatchGraphRepository([
     graphRecord(graphDraftFromTemplate(indigoTemplate, ["FUEL_COST", "CRUDE"])),
   ]);
-  const service = new CatchUpService(watchlists, cursors, intents, sessions, provider, graphs, acknowledgements);
+  const service = new CatchUpService(watchlists, cursors, intents, sessions, provider, graphs);
   return { service, sessions, cursors, watchlists, intents, provider, graphs, acknowledgements };
 }
 

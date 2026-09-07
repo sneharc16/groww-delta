@@ -9,6 +9,7 @@ export function AttentionCard({ item, onMarkSeen, busy }: {
   onMarkSeen: (instrumentId: string) => void;
   busy: boolean;
 }) {
+  const displayedPrice = item.lastConfirmedSnapshot?.pricePaise ?? null;
   return (
     <article className={`attention-card attention-${item.lane.toLowerCase()}`} data-testid={`attention-${item.instrument.symbol}`}>
       <div className="attention-topline">
@@ -17,7 +18,7 @@ export function AttentionCard({ item, onMarkSeen, busy }: {
       </div>
       <div className="attention-company">
         <div><h3>{item.instrument.symbol}</h3><p>{item.instrument.name}</p></div>
-        <div className="attention-price"><strong>{formatINRFromPaise(item.currentPricePaise)}</strong><span>{formatINRFromPaise(item.baselinePricePaise)} → {formatINRFromPaise(item.currentPricePaise)}</span></div>
+        <div className="attention-price"><strong>{displayedPrice === null ? "Price unconfirmed" : formatINRFromPaise(displayedPrice)}</strong><span>{item.currentSnapshot.id === item.lastConfirmedSnapshot?.id ? `${formatINRFromPaise(item.baselinePricePaise)} → ${formatINRFromPaise(displayedPrice!)}` : "Latest confirmed value"}</span></div>
       </div>
       <div className="attention-copy">
         <h4>{item.display.headline}</h4>
@@ -26,6 +27,7 @@ export function AttentionCard({ item, onMarkSeen, busy }: {
         {item.display.connectionPath.length ? <div className="connection-explanation"><span>Why this is connected</span><div className="connection-path">{item.display.connectionPath.map((label, index) => <span key={`${label}-${index}`}>{label}</span>)}</div><small>{item.instrument.name} itself: {formatPercentage(item.priceDeltaBps / 100)} since you last checked</small></div> : null}
         {item.display.additionalSignals.map((signal) => <p className="additional-signal" key={signal}>{signal}</p>)}
       </div>
+      <p className="data-status">{item.trust.label} · observed {formatISTTime(item.trust.eventTime)} IST</p>
       <div className="attention-footer">
         <span>New since {formatISTTime(item.fromTime)}</span>
         <div className="action-row">

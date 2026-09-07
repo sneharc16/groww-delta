@@ -1,5 +1,5 @@
 import type { WatchIntentRecord } from "@/domain/intent/types";
-import type { MarketEventRecord, MarketQuality, MarketSnapshotRecord } from "@/domain/market/types";
+import type { MarketEventRecord, MarketSnapshotRecord } from "@/domain/market/types";
 import {
   companyEventPayloadSchema,
   dividendPayloadSchema,
@@ -10,17 +10,21 @@ import {
 } from "@/domain/intent/schemas";
 import type { IntentMatch } from "./types";
 
-const blockedPriceQualities: MarketQuality[] = ["STALE", "CONFLICTING"];
-const payload = (event: MarketEventRecord) => event.payload as Record<string, unknown>;
+import { canConfirmPrice, canUseEvent } from "@/domain/trust/freshness";
+import { splitRatio } from "@/domain/trust/corporate-actions";
+const payload = (event: MarketEventRecord): Record<string, unknown> => event.payload !== null && typeof event.payload === "object" && !Array.isArray(event.payload) ? event.payload as Record<string, unknown> : {};
 
-function priceMatch(intent: WatchIntentRecord, snapshots: MarketSnapshotRecord[], floor: number): IntentMatch | null {
+function priceMatch(intent: WatchIntentRecord, snapshots: MarketSnapshotRecord[], floor: number, events: MarketEventRecord[]): IntentMatch | null {
   const parsed = priceLevelPayloadSchema.safeParse(intent.structuredPayload);
   if (!parsed.success) return null;
-  const ordered = [...snapshots].sort((a, b) => a.sequence - b.sequence);
+  const ordered = snapshots.filter(canConfirmPrice).sort((a, b) => a.sequence - b.sequence);
   let previous = ordered.filter((snapshot) => snapshot.sequence <= floor).at(-1);
   if (!previous) return null;
   for (const current of ordered.filter((snapshot) => snapshot.sequence > floor)) {
-    const qualityAllowsConfirmation = !blockedPriceQualities.includes(previous.quality) && !blockedPriceQualities.includes(current.quality);
+    if (events.some((event) => event.instrumentId === intent.instrumentId && event.sequence > previous!.sequence && event.sequence <= current.sequence && splitRatio(event))) {
+      previous = current;
+      continue;
+    }
     const target = parsed.data.targetPricePaise;
     const previousNear = Math.abs(previous.pricePaise - target) / target * 10_000 <= parsed.data.proximityBps;
     const currentNear = Math.abs(current.pricePaise - target) / target * 10_000 <= parsed.data.proximityBps;
@@ -31,7 +35,7 @@ function priceMatch(intent: WatchIntentRecord, snapshots: MarketSnapshotRecord[]
         : parsed.data.mode === "BELOW" && previous.pricePaise >= target && current.pricePaise < target
           ? "PRICE_TARGET_CROSSED_BELOW"
           : null;
-    if (qualityAllowsConfirmation && reasonCode) {
+    if (reasonCode) {
       return {
         matchType: "DIRECT",
         logicalIntentId: intent.logicalIntentId,
@@ -125,14 +129,15 @@ export function matchIntents(input: {
   events: MarketEventRecord[];
   cursorSequence: number;
   currentSequence: number;
+  demoTimeTravel?: boolean;
 }): IntentMatch[] {
   const matches = input.intents.flatMap((intent) => {
-    const demoEffectiveSequence = Math.min(intent.effectiveFromSequence, input.currentSequence);
+    const demoEffectiveSequence = input.demoTimeTravel ? Math.min(intent.effectiveFromSequence, input.currentSequence) : intent.effectiveFromSequence;
     const effectiveFloor = Math.max(input.cursorSequence, demoEffectiveSequence);
     if (input.currentSequence <= effectiveFloor) return [];
-    const eligibleEvents = input.events.filter((event) => event.sequence > effectiveFloor && event.sequence <= input.currentSequence);
+    const eligibleEvents = input.events.filter((event) => canUseEvent(event) && event.sequence > effectiveFloor && event.sequence <= input.currentSequence);
     const found = intent.type === "PRICE_LEVEL"
-      ? priceMatch(intent, input.snapshots, effectiveFloor)
+      ? priceMatch(intent, input.snapshots.filter((snapshot) => snapshot.sequence <= input.currentSequence), effectiveFloor, input.events)
       : eventMatch(intent, eligibleEvents);
     return found ? [found] : [];
   });

@@ -3,6 +3,8 @@ export type MarketEventType = "QUOTE_UPDATE" | "RESULTS_PUBLISHED" | "TECHNICAL_
 export type EventSubjectType = "INSTRUMENT" | "METRIC" | "DRIVER" | "EXTERNAL_DRIVER" | "EVENT_CATEGORY" | "PRICE_CONDITION";
 
 export interface MarketSnapshotRecord {
+  scenarioId?: string;
+  receivedTime?: Date | null;
   id: string;
   instrumentId: string;
   sequence: number;
@@ -19,6 +21,7 @@ export interface MarketSnapshotRecord {
 }
 
 export interface MarketEventRecord {
+  scenarioId?: string;
   id: string;
   sequence: number;
   instrumentId: string | null;
@@ -35,6 +38,9 @@ export interface MarketEventRecord {
 }
 
 export interface DemoStateRecord {
+  providerStatus?: "HEALTHY" | "DEGRADED" | "UNAVAILABLE";
+  lastHealthySequence?: number;
+  generation?: number;
   id: string;
   scenarioId: string;
   currentStep: number;
@@ -55,6 +61,8 @@ export interface KnowledgeCursorRecord {
 }
 
 export interface KnowledgeAcknowledgementRecord {
+  scenarioId?: string;
+  demoGeneration?: number;
   id: string;
   userId: string;
   instrumentId: string;

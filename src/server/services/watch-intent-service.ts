@@ -36,6 +36,7 @@ export class WatchIntentService {
     }
     const logicalIntentId = randomUUID();
     const effectiveFromSequence = await this.market.getCurrentSequence();
+    const environment = await this.market.getEnvironment();
     const created = await this.intents.create({
       id: randomUUID(),
       logicalIntentId,
@@ -43,6 +44,7 @@ export class WatchIntentService {
       instrumentId,
       version: 1,
       effectiveFromSequence,
+      effectiveScenarioId: environment.scenarioId, effectiveDemoGeneration: environment.generation,
       supersedesId: null,
       ...toDraft(input),
     });
@@ -54,6 +56,7 @@ export class WatchIntentService {
     const current = await this.intents.findCurrent(userId, logicalIntentId);
     if (!current) throw new AppError("WATCH_INTENT_NOT_FOUND", "No active watch reason was found.", 404);
     const effectiveFromSequence = await this.market.getCurrentSequence();
+    const environment = await this.market.getEnvironment();
     const next = await this.intents.supersedeAndCreate(current.id, {
       id: randomUUID(),
       logicalIntentId,
@@ -61,6 +64,7 @@ export class WatchIntentService {
       instrumentId: current.instrumentId,
       version: current.version + 1,
       effectiveFromSequence,
+      effectiveScenarioId: environment.scenarioId, effectiveDemoGeneration: environment.generation,
       supersedesId: current.id,
       ...toDraft(input),
     });

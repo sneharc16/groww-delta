@@ -19,5 +19,8 @@ export interface DemoAdvanceResult extends DemoMarketState {
 export interface DemoMarketController {
   getDemoState(): Promise<DemoMarketState | null>;
   advanceDemo(): Promise<DemoAdvanceResult | null>;
-  resetDemo(): Promise<DemoMarketState>;
+  resetDemo(userId?: string): Promise<DemoMarketState>;
+  listScenarios(): Array<{ id: string; name: string }>;
+  switchScenario(scenarioId: string, userId: string): Promise<DemoMarketState>;
+  setProviderStatus(status: "HEALTHY" | "DEGRADED" | "UNAVAILABLE"): Promise<void>;
 }

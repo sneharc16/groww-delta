@@ -1,5 +1,4 @@
 import { AppError } from "@/lib/errors/app-error";
-import type { KnowledgeCursorRepository, WatchlistRepository } from "@/server/repositories/contracts";
 import type { MarketDataProvider } from "@/server/market/providers/market-data-provider";
 import type { DemoMarketController, DemoMarketState } from "@/server/market/providers/demo-market-controller";
 import type { DemoStateDto } from "@/server/dto/types";
@@ -7,8 +6,6 @@ import type { DemoStateDto } from "@/server/dto/types";
 export class DemoMarketService {
   constructor(
     private readonly controller: DemoMarketController,
-    private readonly watchlists: WatchlistRepository,
-    private readonly cursors: KnowledgeCursorRepository,
     private readonly market: MarketDataProvider,
   ) {}
 
@@ -20,6 +17,18 @@ export class DemoMarketService {
       currentTime: state.position.currentTime.toISOString(),
       atFinalStep: state.atFinalStep,
     };
+  }
+
+  listScenarios() { return this.controller.listScenarios(); }
+
+  async switchScenario(scenarioId: string, userId: string) {
+    const state = await this.controller.switchScenario(scenarioId, userId);
+    return this.toDto(state);
+  }
+
+  async setProviderStatus(status: "HEALTHY" | "DEGRADED" | "UNAVAILABLE") {
+    await this.controller.setProviderStatus(status);
+    return this.market.getHealth();
   }
 
   async getState() {
@@ -35,18 +44,7 @@ export class DemoMarketService {
   }
 
   async reset(userId: string) {
-    const resetState = await this.controller.resetDemo();
-    const watchlist = await this.watchlists.getDefaultForUser(userId);
-    if (!watchlist) throw new AppError("WATCHLIST_NOT_FOUND", "The default watchlist has not been seeded.", 404);
-    const instrumentIds = watchlist.items.map((item) => item.instrumentId);
-    const snapshots = await this.market.getSnapshotsAtOrBefore(instrumentIds, resetState.position.currentSequence);
-    if (snapshots.length !== instrumentIds.length) throw new AppError("INVALID_MARKET_STATE", "Initial replay snapshots are incomplete.", 409);
-    await this.cursors.resetMany(userId, snapshots.map((snapshot) => ({
-      instrumentId: snapshot.instrumentId,
-      sequence: resetState.position.currentSequence,
-      eventTime: snapshot.eventTime,
-      snapshotId: snapshot.id,
-    })));
+    const resetState = await this.controller.resetDemo(userId);
     return { ...this.toDto(resetState), reset: true };
   }
 }

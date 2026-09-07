@@ -85,6 +85,8 @@ export class WatchGraphService {
         provenance: "CURATED_TEMPLATE",
         templateKey: template.key,
         effectiveFromSequence: await this.market.getCurrentSequence(),
+        effectiveScenarioId: (await this.market.getEnvironment()).scenarioId,
+        effectiveDemoGeneration: (await this.market.getEnvironment()).generation,
         supersedesId: previous?.id ?? null,
         nodes: draft.nodes.map((node) => ({ ...node, id: nodeIds.get(node.nodeKey)! })),
         edges: draft.edges.map((edge) => ({ ...edge, id: randomUUID(), fromNodeId: nodeIds.get(edge.fromKey)!, toNodeId: nodeIds.get(edge.toKey)! })),

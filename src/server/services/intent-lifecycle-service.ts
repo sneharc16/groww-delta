@@ -1,3 +1,5 @@
+import { inReplayEnvironment } from "@/domain/market/effective-sequence";
+import { resolveCorrections } from "@/domain/trust/events";
 import { randomUUID } from "node:crypto";
 import { earningsPayloadSchema } from "@/domain/intent/schemas";
 import { evaluateIntentLifecycle, nextQuarterLabel } from "@/domain/intent/lifecycle";
@@ -43,8 +45,8 @@ export class IntentLifecycleService {
       const version = intentRows.filter((intent) => intent.logicalIntentId === id).sort((a, b) => b.version - a.version)[0];
       return version ? [version] : [];
     });
-    const lifecycle = latest.map((intent) => toIntentLifecycleDto(evaluateIntentLifecycle({ intent, cursor, snapshots, events: events.filter((event) => event.instrumentId === instrumentId), currentSequence: state.currentSequence, currentTime: state.currentTime })));
-    const timeline = buildWatchTimeline({ intents: intentRows, graphs: graphHistory, acknowledgements, snapshots, events: events.filter((event) => event.instrumentId === instrumentId || event.instrumentId === null), currentSequence: state.currentSequence });
+    const lifecycle = latest.map((stored) => toIntentLifecycleDto(evaluateIntentLifecycle({ intent: inReplayEnvironment(stored, state.scenarioId, state.generation), cursor, snapshots, events: resolveCorrections(events).current.filter((event) => event.instrumentId === instrumentId), currentSequence: state.currentSequence, currentTime: state.currentTime })));
+    const timeline = buildWatchTimeline({ intents: intentRows, graphs: graphHistory, acknowledgements: acknowledgements.filter((ack) => (ack.scenarioId ?? "groww-delta-default") === state.scenarioId && (ack.demoGeneration ?? 0) === (state.generation ?? 0)), snapshots, events: events.filter((event) => event.instrumentId === instrumentId || event.instrumentId === null), currentSequence: state.currentSequence });
 
     return { lifecycle, timeline: timeline.map((entry) => ({ ...entry, occurredAt: entry.occurredAt.toISOString() })) };
   }
@@ -66,8 +68,13 @@ export class IntentLifecycleService {
   async renew(userId: string, logicalIntentId: string, untrusted: unknown) {
     const input = renewIntentSchema.parse(untrusted);
     const [previous, state] = await Promise.all([this.intents.findLatest(userId, logicalIntentId), this.state()]);
-    if (!previous || previous.status !== "RESOLVED") throw new AppError("INTENT_NOT_RESOLVED", "Resolve the current watch reason before watching the next cycle.", 409);
+    if (!previous) throw new AppError("WATCH_INTENT_NOT_FOUND", "The watch reason was not found.", 404);
     if (previous.type !== "EARNINGS" && previous.type !== "DIVIDEND") throw new AppError("INTENT_NOT_RENEWABLE", "Only results and dividend watch reasons can renew to a next cycle.", 400);
+    if (previous.status === "ACTIVE") {
+      const lifecycle = (await this.getInstrument(userId, previous.instrumentId)).lifecycle.find((item) => item.logicalIntentId === logicalIntentId);
+      if (!lifecycle || !["RESOLUTION_ELIGIBLE", "STALE_CANDIDATE"].includes(lifecycle.state)) throw new AppError("INTENT_NOT_RESOLVED", "Acknowledge the saved update before watching the next cycle.", 409);
+      await this.resolve(userId, logicalIntentId);
+    } else if (previous.status !== "RESOLVED") throw new AppError("INTENT_NOT_RESOLVED", "Only an acknowledged or resolved reason can renew.", 409);
     let structuredPayload = previous.structuredPayload;
     let originalText = previous.originalText;
     if (previous.type === "EARNINGS") {
@@ -81,7 +88,7 @@ export class IntentLifecycleService {
     }
     const renewed = await this.intents.renew(previous.id, {
       id: randomUUID(), logicalIntentId, userId, instrumentId: previous.instrumentId, version: previous.version + 1,
-      effectiveFromSequence: state.currentSequence, supersedesId: previous.id, type: previous.type, originalText,
+      effectiveFromSequence: state.currentSequence, effectiveScenarioId: state.scenarioId, effectiveDemoGeneration: state.generation ?? 0, supersedesId: previous.id, type: previous.type, originalText,
       structuredPayload, provenanceSource: "STOCK_DETAIL", provenanceReference: null, horizon: previous.horizon,
       expiresAt: null,
     });
@@ -92,7 +99,7 @@ export class IntentLifecycleService {
       await this.graphs.createVersion(latestGraph.id, {
         id: randomUUID(), logicalGraphId: latestGraph.logicalGraphId, userId, instrumentId: latestGraph.instrumentId,
         watchIntentLogicalId: logicalIntentId, version: latestGraph.version + 1, provenance: latestGraph.provenance,
-        templateKey: latestGraph.templateKey, effectiveFromSequence: state.currentSequence, supersedesId: latestGraph.id,
+        templateKey: latestGraph.templateKey, effectiveScenarioId: state.scenarioId, effectiveDemoGeneration: state.generation ?? 0, effectiveFromSequence: state.currentSequence, supersedesId: latestGraph.id,
         nodes: latestGraph.nodes.map((node) => ({ id: nodeIds.get(node.id)!, nodeKey: node.nodeKey, type: node.type, label: node.label, metadata: (node.metadata ?? {}) as Record<string, string | number | boolean> })),
         edges: latestGraph.edges.map((edge) => ({ id: randomUUID(), fromKey: "", toKey: "", relationship: edge.relationship, weight: edge.weight, fromNodeId: nodeIds.get(edge.fromNodeId)!, toNodeId: nodeIds.get(edge.toNodeId)! })),
       });

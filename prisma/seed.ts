@@ -2,6 +2,8 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, Prisma } from "../src/generated/prisma/client";
 import { defaultReplayScenario, replayInstruments } from "../data/replay/default-scenario";
+import { replayScenarios } from "../data/replay/scenarios";
+import { PRIMARY_BENCHMARK } from "../src/domain/trust/policy";
 import { findDriverTemplate, graphDraftFromTemplate } from "../src/domain/graph/templates";
 
 const connectionString = process.env.DATABASE_URL;
@@ -142,13 +144,19 @@ async function main() {
     });
   }
 
-  for (const step of defaultReplayScenario.steps) {
+  await prisma.instrument.upsert({ where: { id: PRIMARY_BENCHMARK }, update: { kind: "INDEX", isWatchlistEligible: false }, create: {
+    id: PRIMARY_BENCHMARK, symbol: "NIFTY50", exchange: "NSE", name: "Nifty 50", sector: null, currency: "INR", kind: "INDEX", isWatchlistEligible: false,
+  } });
+  for (const scenario of replayScenarios) {
+  for (const step of scenario.steps) {
     for (const snapshot of step.snapshots) {
-      const id = `snapshot:${step.sequence}:${snapshot.instrumentId}`;
+      const id = scenario.id === "groww-delta-default" ? `snapshot:${step.sequence}:${snapshot.instrumentId}` : `snapshot:${scenario.id}:${step.sequence}:${snapshot.instrumentId}`;
       await prisma.marketSnapshot.upsert({
         where: { id },
         update: {
-          eventTime: new Date(step.eventTime),
+          scenarioId: scenario.id,
+          eventTime: new Date(Date.parse(step.eventTime) - (snapshot.delaySeconds ?? 0) * 1000),
+          receivedTime: new Date(step.eventTime),
           pricePaise: snapshot.pricePaise,
           openPaise: snapshot.openPaise,
           highPaise: snapshot.highPaise,
@@ -157,13 +165,15 @@ async function main() {
           expectedCumulativeVolume: snapshot.expectedCumulativeVolume,
           expectedStepMoveBps: snapshot.expectedStepMoveBps,
           source: "ReplayMarketProvider",
-          quality: "FRESH",
+          quality: snapshot.quality ?? "FRESH",
         },
         create: {
           id,
           instrumentId: snapshot.instrumentId,
           sequence: step.sequence,
-          eventTime: new Date(step.eventTime),
+          scenarioId: scenario.id,
+          eventTime: new Date(Date.parse(step.eventTime) - (snapshot.delaySeconds ?? 0) * 1000),
+          receivedTime: new Date(step.eventTime),
           pricePaise: snapshot.pricePaise,
           openPaise: snapshot.openPaise,
           highPaise: snapshot.highPaise,
@@ -172,18 +182,21 @@ async function main() {
           expectedCumulativeVolume: snapshot.expectedCumulativeVolume,
           expectedStepMoveBps: snapshot.expectedStepMoveBps,
           source: "ReplayMarketProvider",
-          quality: "FRESH",
+          quality: snapshot.quality ?? "FRESH",
         },
       });
     }
   }
 
-  for (const event of defaultReplayScenario.events) {
+  for (const event of scenario.events) {
     await prisma.marketEvent.upsert({
       where: { id: event.id },
       update: {
         eventTime: new Date(event.eventTime),
-        receivedTime: new Date(event.eventTime),
+        receivedTime: new Date(event.receivedTime ?? event.eventTime),
+        scenarioId: scenario.id,
+        correctionOfId: event.correctionOfId ?? null,
+        quality: event.quality ?? "FRESH",
         subjectType: event.subjectType,
         subjectKey: event.subjectKey,
         tags: event.tags,
@@ -192,14 +205,17 @@ async function main() {
       create: {
         ...event,
         eventTime: new Date(event.eventTime),
-        receivedTime: new Date(event.eventTime),
+        receivedTime: new Date(event.receivedTime ?? event.eventTime),
+        scenarioId: scenario.id,
+        correctionOfId: event.correctionOfId ?? null,
+        quality: event.quality ?? "FRESH",
         source: "ReplayMarketProvider",
-        quality: "FRESH",
         payload: event.payload as Prisma.InputJsonValue,
       },
     });
   }
 
+  }
   const initialStep = defaultReplayScenario.steps[0];
   for (const instrument of replayInstruments) {
     await prisma.knowledgeCursor.upsert({

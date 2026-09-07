@@ -338,3 +338,17 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .review-list article { align-items: flex-start; flex-direction: column; }
   .watch-timeline li { grid-template-columns: 62px minmax(0, 1fr); }
 }
+
+/* Trust status uses calm, informational surfaces. */
+.trust-notices { display: grid; gap: 12px; margin-bottom: 20px; }
+.trust-notice { padding: 20px; border-left: 3px solid #8a91af; background: #fafbff; }
+.trust-notice h2, .calm-panel h2 { font-size: 17px; margin-bottom: 8px; }
+.trust-notice p, .calm-panel p { font-size: 14px; line-height: 1.6; }
+.trust-notice small, .data-status { color: #596479; font-size: 12px; line-height: 1.6; }
+.trust-caution { border-left-color: #b68b43; background: #fffdf8; }
+.calm-panel { margin-bottom: 20px; background: #f5f7fb; }
+.calm-panel details { margin-top: 16px; }
+.calm-panel li { padding: 6px 0; }
+.data-status { margin: 12px 0; }
+.form-field select { display: block; width: 100%; margin: 8px 0 16px; padding: 10px; border: 1px solid #dce1e8; border-radius: 8px; background: white; }
+.trust-notice .action-row { flex-wrap: wrap; margin-top: 12px; }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatISTTime } from "@/lib/format/market";
 import { ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import type { IntentLifecycleDto, WatchIntentDto, WatchlistItemDto } from "@/server/dto/types";
 import { PROVENANCE_LABELS } from "@/lib/constants";
@@ -27,6 +28,7 @@ export function WatchlistRow({ item, attentionLane, lifecycle, onEdit, onAddReas
       </Link>
       <div className="market-cell">
         {item.snapshot ? <Price pricePaise={item.snapshot.pricePaise} changePercent={item.snapshot.dayChangePercent} /> : <span className="muted">No replay price</span>}
+      {item.dataTrust && <small className="muted">{item.dataTrust.label} · {formatISTTime(item.dataTrust.eventTime)} IST</small>}
       </div>
       <div className="reason-cell">
         {item.activeIntents.length ? item.activeIntents.map((intent) => (

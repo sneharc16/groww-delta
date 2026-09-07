@@ -17,6 +17,8 @@ export interface WatchIntentRecord {
   status: IntentStatus;
   version: number;
   effectiveFromSequence: number;
+  effectiveScenarioId?: string;
+  effectiveDemoGeneration?: number;
   resolvedAt: Date | null;
   resolvedAtSequence: number | null;
   lifecycleReviewedThroughSequence: number | null;

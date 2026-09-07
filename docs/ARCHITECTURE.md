@@ -73,3 +73,27 @@ A future live provider belongs beside `ReplayMarketProvider` and would be select
 PostgreSQL is the only source of product state. A partial unique index enforces one active `WatchlistItem` for each watchlist/instrument pair while allowing archived history and later re-addition. Intent and Watch Graph versions keep immutable predecessor links. Graph nodes and edges are relational and loaded through repositories. `KnowledgeAcknowledgement` retains audit history while `KnowledgeCursor` remains current monotonic state. Attention items are not stored: they are reproducibly derived from market facts, active intent/graph versions, and cursor state.
 
 Graph traversal is bounded to three edges and 25 visited nodes. A normalized event subject is authoritative when present; tags provide fallback matching for events without a subject. This lets removal of a specifically tracked subject take effect without a broader context tag silently restoring it.
+
+## Build 4 trust/context flow
+
+```mermaid
+flowchart TD
+  Provider[MarketDataProvider: snapshots, events, health] --> Normalize[Stable event deduplication and ordering]
+  Normalize --> Corrections[Correction chain resolution]
+  Corrections --> Trust[Trust assessment and split discontinuities]
+  Trust --> Analyzer[Existing AttentionAnalyzer]
+  Cursor[Knowledge Cursor] --> Analyzer
+  Intents[Effective intent and graph versions] --> Analyzer
+  Benchmark[Benchmark snapshots and equity breadth] --> Context[Market Context / Calm Mode]
+  Context --> Analyzer
+  Analyzer --> Notices[Trust Notices]
+  Analyzer --> Lanes[Attention lanes and grouped moves]
+  Notices --> UI[Consumer UI]
+  Lanes --> UI
+```
+
+Trust logic is under `src/domain/trust`; benchmark policy is under `src/domain/market/context.ts`. CorporateActionService derives authoritative adjustment commands; CorporateActionReviewRepository atomically records decisions and adjusted intent versions. UI renders DTOs and never computes trust or residuals.
+
+Cursor advancement and per-instrument acknowledgement history share one transaction, with deterministic row locks and conditional increments. The acknowledgement command also guards against a replay reset occurring during the command. Scenario reset is a transactional session/cursor update. Scenario/generation namespaces keep replay history separate without weakening the production matcher.
+
+The registry is fixture input behind ReplayMarketProvider. Services request provider data, not scenario-specific attention outcomes. PostgreSQL is still the only source of product state; no cache or extra service was added. See [Build 4](BUILD4.md) for the documentation-only production ingestion evolution.

@@ -24,6 +24,7 @@ export function toSnapshotDto(snapshot: MarketSnapshotRecord): MarketSnapshotDto
     instrumentId: snapshot.instrumentId,
     sequence: snapshot.sequence,
     eventTime: snapshot.eventTime.toISOString(),
+    receivedTime: snapshot.receivedTime?.toISOString() ?? null,
     pricePaise: snapshot.pricePaise,
     openPaise: snapshot.openPaise,
     highPaise: snapshot.highPaise,
@@ -92,6 +93,9 @@ export function toCursorDto(cursor: KnowledgeCursorRecord): KnowledgeCursorDto {
 
 export function toAttentionItemDto(item: AttentionItem): AttentionItemDto {
   return {
+    conditionAssessments: item.conditionAssessments, lastConfirmedSnapshot: item.lastConfirmedSnapshot ? toSnapshotDto(item.lastConfirmedSnapshot) : null,
+    trust: item.trust, trustNotices: item.trustNotices, trustedBaselineSnapshotId: item.trustedBaselineSnapshotId,
+    marketAdjustedDeltaBps: item.marketAdjustedDeltaBps, groupedMarketMove: item.groupedMarketMove,
     instrument: toInstrumentDto(item.instrument),
     fromSequence: item.fromSequence,
     toSequence: item.toSequence,
@@ -135,7 +139,7 @@ export function toAttentionItemDto(item: AttentionItem): AttentionItemDto {
     })),
     relevancePaths: item.relevancePaths,
     reasonCodes: item.reasonCodes,
-    eventSummaries: item.eventSummaries.map((event) => ({ ...event, eventTime: event.eventTime.toISOString() })),
+    eventSummaries: item.eventSummaries.map((event) => ({ ...event, eventTime: event.eventTime.toISOString(), receivedTime: event.receivedTime.toISOString() })),
     display: item.display,
   };
 }

@@ -52,6 +52,23 @@ enum MarketEventType {
   NEWS_EVENT
 }
 
+enum InstrumentKind {
+  EQUITY
+  INDEX
+}
+
+enum ProviderStatus {
+  HEALTHY
+  DEGRADED
+  UNAVAILABLE
+}
+
+enum CorporateActionDecision {
+  ADJUST
+  KEEP
+  LATER
+}
+
 enum EventSubjectType {
   INSTRUMENT
   METRIC
@@ -110,6 +127,8 @@ model User {
 }
 
 model Instrument {
+  kind InstrumentKind @default(EQUITY)
+  isWatchlistEligible Boolean @default(true)
   id               String                     @id
   symbol           String
   exchange         String
@@ -158,6 +177,8 @@ model WatchlistItem {
 }
 
 model WatchIntent {
+  effectiveScenarioId String @default("groww-delta-default")
+  effectiveDemoGeneration Int @default(0)
   id                               String           @id @default(cuid())
   logicalIntentId                  String
   userId                           String
@@ -205,6 +226,8 @@ model KnowledgeCursor {
 }
 
 model MarketSnapshot {
+  scenarioId String @default("groww-delta-default")
+  receivedTime DateTime? @db.Timestamptz(3)
   id                       String            @id
   instrumentId             String
   sequence                 Int
@@ -222,11 +245,12 @@ model MarketSnapshot {
   instrument               Instrument        @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
   observedByCursors        KnowledgeCursor[]
 
-  @@unique([instrumentId, sequence])
+  @@unique([scenarioId, instrumentId, sequence])
   @@index([sequence])
 }
 
 model MarketEvent {
+  scenarioId String @default("groww-delta-default")
   id             String            @id
   sequence       Int
   instrumentId   String?
@@ -250,6 +274,8 @@ model MarketEvent {
 }
 
 model WatchGraph {
+  effectiveScenarioId String @default("groww-delta-default")
+  effectiveDemoGeneration Int @default(0)
   id                    String           @id
   logicalGraphId        String
   userId                String
@@ -309,6 +335,8 @@ model WatchGraphEdge {
 }
 
 model KnowledgeAcknowledgement {
+  scenarioId String @default("groww-delta-default")
+  demoGeneration Int @default(0)
   id              String               @id @default(cuid())
   userId          String
   instrumentId    String
@@ -323,6 +351,9 @@ model KnowledgeAcknowledgement {
 }
 
 model DemoSession {
+  providerStatus ProviderStatus @default(HEALTHY)
+  lastHealthySequence Int @default(0)
+  generation Int @default(0)
   id              String   @id
   scenarioId      String
   currentStep     Int
@@ -330,4 +361,20 @@ model DemoSession {
   currentTime     DateTime @db.Timestamptz(3)
   createdAt       DateTime @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+}
+
+model CorporateActionReview {
+  demoGeneration Int @default(0)
+  id String @id @default(cuid())
+  userId String
+  logicalIntentId String
+  eventId String
+  scenarioId String
+  decision CorporateActionDecision
+  originalTargetPaise Int
+  adjustedTargetPaise Int
+  resultingIntentId String?
+  decidedAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([userId, logicalIntentId, eventId, demoGeneration], map: "CorporateActionReview_identity_key")
 }

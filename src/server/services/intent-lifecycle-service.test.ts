@@ -63,6 +63,17 @@ describe("IntentLifecycleService", () => {
     expect(result.lifecycle.find((item) => item.logicalIntentId === "tcs-results")?.state).toBe("RESOLVED");
   });
 
+  it("renews acknowledged ACTIVE earnings in the service without a UI-owned resolve command", async () => {
+    const result = await service.renew("demo-user", "tcs-results", {});
+    expect(result.intent.version).toBe(2);
+    expect(intents.rows.find((row) => row.id === "tcs-v1")?.status).toBe("RESOLVED");
+  });
+
+  it("rejects nonrenewable reasons before changing their status", async () => {
+    await expect(service.renew("demo-user", "tcs-long-term", {})).rejects.toMatchObject({ code: "INTENT_NOT_RENEWABLE" });
+    expect(intents.rows.find((row) => row.id === "tcs-long")?.status).toBe("ACTIVE");
+  });
+
   it("keeps an eligible reason active when the user chooses to keep watching", async () => {
     await service.keepWatching("demo-user", "tcs-results");
     const result = await service.getInstrument("demo-user", "NSE:TCS");

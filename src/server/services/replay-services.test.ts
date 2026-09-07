@@ -2,8 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { defaultReplayScenario } from "../../../data/replay/default-scenario";
 import { DemoMarketService } from "./demo-market-service";
 import { ReplayMarketProvider } from "@/server/market/providers/replay-market-provider";
-import { MemoryDemoSessionRepository, MemoryEventRepository, MemoryKnowledgeCursorRepository, MemorySnapshotRepository, MemoryWatchlistRepository, cursorRecord, intentRecord, testInstrument, watchlistRecord } from "../../../tests/helpers/in-memory";
-import type { WatchlistItemRecord } from "@/server/repositories/contracts";
+import { MemoryDemoSessionRepository, MemoryEventRepository, MemoryKnowledgeCursorRepository, MemorySnapshotRepository, cursorRecord, intentRecord } from "../../../tests/helpers/in-memory";
 import type { MarketEventRecord, MarketSnapshotRecord } from "@/domain/market/types";
 
 const snapshots: MarketSnapshotRecord[] = defaultReplayScenario.steps.flatMap((step) => step.snapshots.map((snapshot) => ({
@@ -34,10 +33,10 @@ describe("deterministic replay", () => {
   beforeEach(() => {
     sessions = new MemoryDemoSessionRepository();
     provider = new ReplayMarketProvider(sessions, new MemorySnapshotRepository(snapshots), new MemoryEventRepository(events));
-    const item: WatchlistItemRecord = { id: "item-tcs", watchlistId: "demo-watchlist", instrumentId: "NSE:TCS", addedAt: new Date(), archivedAt: null, provenanceSource: "IMPORTED_DEMO", provenanceReference: null, instrument: testInstrument };
     cursors = new MemoryKnowledgeCursorRepository([cursorRecord()]);
     intents = [intentRecord()];
-    service = new DemoMarketService(provider, new MemoryWatchlistRepository(watchlistRecord([item])), cursors, provider);
+    sessions.resetBaselines = async (userId, baselines) => { await cursors.resetMany(userId, baselines.filter((row) => row.instrumentId === "NSE:TCS")); };
+    service = new DemoMarketService(provider, provider);
   });
 
   it("returns the exact Step 0 snapshot", async () => {
@@ -50,7 +49,7 @@ describe("deterministic replay", () => {
     await service.advance();
     expect((await service.getState()).currentStep).toBe(1);
     expect((await provider.getCurrentSnapshot("NSE:TCS"))?.pricePaise).toBe(320600);
-    expect((await new DemoMarketService(provider, new MemoryWatchlistRepository(watchlistRecord()), new MemoryKnowledgeCursorRepository(), provider).getState()).currentStep).toBe(1);
+    expect((await new DemoMarketService(provider, provider).getState()).currentStep).toBe(1);
   });
 
   it("does not advance beyond the final replay step", async () => {

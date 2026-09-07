@@ -63,6 +63,14 @@ describe("watch intent lifecycle", () => {
     expect(evaluate(intentRecord(), 2, 4).state).toBe("STALE_CANDIDATE");
   });
 
+  it("does not count time before acknowledgement toward stale age", () => {
+    const result = evaluateIntentLifecycle({
+      intent: intentRecord(), cursor: cursorRecord({ lastSeenSequence: 4, lastSeenEventTime: new Date(defaultReplayScenario.steps[4].eventTime) }),
+      snapshots, events, currentSequence: 4, currentTime: new Date(defaultReplayScenario.steps[4].eventTime),
+    });
+    expect(result.state).toBe("RESOLUTION_ELIGIBLE");
+  });
+
   it("increments deterministic quarter labels", () => {
     expect(nextQuarterLabel("Q2")).toBe("Q3");
     expect(nextQuarterLabel("Q4")).toBe("Q1");

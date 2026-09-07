@@ -1,6 +1,8 @@
 import type { MarketEventRecord, MarketSnapshotRecord } from "@/domain/market/types";
 
 export interface MarketDataProvider {
+  getEnvironment(): Promise<{ scenarioId: string; demoTimeTravel: boolean; generation: number }>;
+  getHealth(): Promise<import("@/domain/trust/types").MarketProviderHealth>;
   getCurrentSnapshot(instrumentId: string): Promise<MarketSnapshotRecord | null>;
   getCurrentSnapshots(instrumentIds: string[]): Promise<MarketSnapshotRecord[]>;
   getSnapshots(instrumentId: string): Promise<MarketSnapshotRecord[]>;

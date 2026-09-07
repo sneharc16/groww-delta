@@ -17,6 +17,8 @@ import { WatchIntentService } from "@/server/services/watch-intent-service";
 import { WatchlistService } from "@/server/services/watchlist-service";
 import { CatchUpService } from "@/server/services/catch-up-service";
 import { WatchGraphService } from "@/server/services/watch-graph-service";
+import { PrismaCorporateActionReviewRepository } from "@/server/repositories/corporate-action-repository";
+import { CorporateActionService } from "@/server/services/corporate-action-service";
 import { IntentLifecycleService } from "@/server/services/intent-lifecycle-service";
 
 const instruments = new PrismaInstrumentRepository();
@@ -28,15 +30,17 @@ const events = new PrismaMarketEventRepository();
 const cursors = new PrismaKnowledgeCursorRepository();
 const acknowledgements = new PrismaKnowledgeAcknowledgementRepository();
 const graphs = new PrismaWatchGraphRepository();
+const corporateReviews = new PrismaCorporateActionReviewRepository();
 const market = new ReplayMarketProvider(sessions, snapshots, events);
 
 export const services = {
+  corporateActions: new CorporateActionService(corporateReviews, intents, market),
   instruments: new InstrumentService(instruments),
   watchlist: new WatchlistService(watchlists, instruments, intents, market, cursors),
   watchIntents: new WatchIntentService(intents, instruments, market),
-  demo: new DemoMarketService(market, watchlists, cursors, market),
+  demo: new DemoMarketService(market, market),
   market: new MarketQueryService(market, watchlists),
-  catchUp: new CatchUpService(watchlists, cursors, intents, sessions, market, graphs, acknowledgements),
+  catchUp: new CatchUpService(watchlists, cursors, intents, sessions, market, graphs, corporateReviews),
   watchGraphs: new WatchGraphService(graphs, intents, market),
   intentLifecycle: new IntentLifecycleService(intents, graphs, cursors, acknowledgements, sessions, market),
 };

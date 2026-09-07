@@ -1,4 +1,4 @@
-import type { EventSubjectType, MarketEventType } from "../../src/domain/market/types";
+import type { EventSubjectType, MarketEventType, MarketQuality } from "../../src/domain/market/types";
 
 export interface ReplayInstrument {
   id: string;
@@ -9,6 +9,8 @@ export interface ReplayInstrument {
 }
 
 export interface ReplaySnapshotFixture {
+  quality?: MarketQuality;
+  delaySeconds?: number;
   instrumentId: string;
   pricePaise: number;
   openPaise: number;
@@ -27,6 +29,9 @@ export interface ReplayStep {
 }
 
 export interface ReplayEventFixture {
+  quality?: MarketQuality;
+  receivedTime?: string;
+  correctionOfId?: string;
   id: string;
   sequence: number;
   instrumentId: string | null;

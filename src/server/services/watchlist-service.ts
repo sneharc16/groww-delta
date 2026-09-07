@@ -1,5 +1,6 @@
 import type { InstrumentRepository, KnowledgeCursorRepository, WatchIntentRepository, WatchlistRepository } from "@/server/repositories/contracts";
 import type { MarketDataProvider } from "@/server/market/providers/market-data-provider";
+import { assessData, canConfirmPrice } from "@/domain/trust/freshness";
 import { AppError } from "@/lib/errors/app-error";
 import { toInstrumentDto, toIntentDto, toSnapshotDto } from "@/server/dto/mappers";
 import type { WatchlistDto } from "@/server/dto/types";
@@ -17,14 +18,19 @@ export class WatchlistService {
     const watchlist = await this.watchlists.getDefaultForUser(userId);
     if (!watchlist) throw new AppError("WATCHLIST_NOT_FOUND", "The default watchlist has not been seeded.", 404);
     const instrumentIds = watchlist.items.map((item) => item.instrumentId);
-    const [snapshots, intentRows] = await Promise.all([
+    const sequence = await this.market.getCurrentSequence();
+    const [snapshots, intentRows, history, health] = await Promise.all([
       this.market.getCurrentSnapshots(instrumentIds),
       this.intents.listActiveForInstruments(userId, instrumentIds),
+      this.market.getSnapshotsForAnalysis(instrumentIds, sequence),
+      this.market.getHealth(),
     ]);
     const snapshotsByInstrument = new Map(snapshots.map((snapshot) => [snapshot.instrumentId, snapshot]));
     const items = watchlist.items.map((item) => {
-      const snapshot = snapshotsByInstrument.get(item.instrumentId);
+      const observed = snapshotsByInstrument.get(item.instrumentId);
+      const snapshot = observed && (observed.quality === "STALE" || observed.quality === "CONFLICTING") ? history.filter((row) => row.instrumentId === item.instrumentId && canConfirmPrice(row)).sort((a, b) => b.sequence - a.sequence)[0] : observed;
       return {
+        dataTrust: observed ? { ...assessData(observed, observed.receivedTime ?? observed.eventTime), ...(health.status === "UNAVAILABLE" ? { label: "Last available data · provider unavailable" } : {}) } : null,
         id: item.id,
         addedAt: item.addedAt.toISOString(),
         provenanceSource: item.provenanceSource,
@@ -40,12 +46,15 @@ export class WatchlistService {
   async add(userId: string, instrumentId: string) {
     const watchlist = await this.watchlists.getDefaultForUser(userId);
     if (!watchlist) throw new AppError("WATCHLIST_NOT_FOUND", "The default watchlist has not been seeded.", 404);
-    if (!(await this.instruments.findById(instrumentId))) {
+    const instrument = await this.instruments.findById(instrumentId);
+    if (!instrument || instrument.kind === "INDEX" || instrument.isWatchlistEligible === false) {
       throw new AppError("INSTRUMENT_NOT_FOUND", "The selected instrument does not exist.", 404);
     }
     if (await this.watchlists.findActiveItem(watchlist.id, instrumentId)) {
       throw new AppError("DUPLICATE_WATCHLIST_ITEM", "This instrument is already in the watchlist.", 409);
     }
+    const health = await this.market.getHealth();
+    if (health.status === "UNAVAILABLE") throw new AppError("PROVIDER_UNAVAILABLE", "Add this stock once current market data is available to establish its baseline.", 409);
     const currentSequence = await this.market.getCurrentSequence();
     const snapshot = await this.market.getSnapshotAtOrBefore(instrumentId, currentSequence);
     if (!snapshot) throw new AppError("INVALID_MARKET_STATE", "No current market snapshot exists for this instrument.", 409);

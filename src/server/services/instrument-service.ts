@@ -5,6 +5,6 @@ export class InstrumentService {
   constructor(private readonly instruments: InstrumentRepository) {}
 
   async listAvailable() {
-    return (await this.instruments.listActive()).map(toInstrumentDto);
+    return (await this.instruments.listActive()).filter((instrument) => instrument.isWatchlistEligible !== false && instrument.kind !== "INDEX").map(toInstrumentDto);
   }
 }

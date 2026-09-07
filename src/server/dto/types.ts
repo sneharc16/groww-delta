@@ -15,6 +15,7 @@ export interface InstrumentDto {
 }
 
 export interface MarketSnapshotDto {
+  receivedTime: string | null;
   id: string;
   instrumentId: string;
   sequence: number;
@@ -54,6 +55,7 @@ export interface WatchIntentDto {
 }
 
 export interface WatchlistItemDto {
+  dataTrust: import("@/domain/trust/types").DataTrust | null;
   id: string;
   addedAt: string;
   provenanceSource: ProvenanceSource;
@@ -102,6 +104,13 @@ export interface KnowledgeCursorDto {
 }
 
 export interface AttentionItemDto {
+  conditionAssessments: import("@/domain/trust/price-conditions").PriceConditionAssessment[];
+  lastConfirmedSnapshot: MarketSnapshotDto | null;
+  trust: import("@/domain/trust/types").DataTrust;
+  trustNotices: import("@/domain/trust/types").TrustNotice[];
+  trustedBaselineSnapshotId: string | null;
+  marketAdjustedDeltaBps: number | null;
+  groupedMarketMove: boolean;
   instrument: InstrumentDto;
   fromSequence: number;
   toSequence: number;
@@ -133,6 +142,9 @@ export interface AttentionItemDto {
     id: string;
     type: MarketEventType;
     eventTime: string;
+    receivedTime: string;
+    source: string;
+    correctionOfId: string | null;
     quality: MarketQuality;
     payload: unknown;
     subjectKey: string | null;
@@ -142,6 +154,10 @@ export interface AttentionItemDto {
 }
 
 export interface CatchUpDto {
+  trustNotices: import("@/domain/trust/types").TrustNotice[];
+  marketContext: import("@/domain/market/context").MarketContext | null;
+  providerHealth: import("@/domain/trust/types").MarketProviderHealth;
+  groupedMarketMoves: AttentionItemDto[];
   asOfSequence: number;
   asOfTime: string;
   cursorSummary: {

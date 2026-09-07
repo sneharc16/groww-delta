@@ -39,6 +39,8 @@ export interface WatchGraphRecord {
   provenance: GraphProvenance;
   templateKey: string | null;
   effectiveFromSequence: number;
+  effectiveScenarioId?: string;
+  effectiveDemoGeneration?: number;
   supersedesId: string | null;
   createdAt: Date;
   updatedAt: Date;

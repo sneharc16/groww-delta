@@ -49,7 +49,7 @@ export function evaluateIntentLifecycle(input: {
   }
   const stale = (intent.type === "EARNINGS" || intent.type === "DIVIDEND" || intent.type === "COMPANY_EVENT")
     && triggerTime !== null
-    && input.currentTime.getTime() - triggerTime.getTime() >= STALE_AFTER_ACK_MS;
+    && input.currentTime.getTime() - Math.max(triggerTime.getTime(), input.cursor.lastSeenEventTime?.getTime() ?? 0) >= STALE_AFTER_ACK_MS;
   const reason = intent.type === "EARNINGS"
     ? "The saved results event occurred and you have seen the update."
     : intent.type === "PRICE_LEVEL"
