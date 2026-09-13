@@ -20,10 +20,11 @@ export class IntentLifecycleService {
     private readonly acknowledgements: KnowledgeAcknowledgementRepository,
     private readonly sessions: DemoSessionRepository,
     private readonly market: MarketDataProvider,
+    private readonly demoSessionId = DEFAULT_DEMO_SESSION_ID,
   ) {}
 
   private async state() {
-    const state = await this.sessions.getById(DEFAULT_DEMO_SESSION_ID);
+    const state = await this.sessions.getById(this.demoSessionId);
     if (!state) throw new AppError("INVALID_MARKET_STATE", "The demo market state is unavailable.", 409);
     return state;
   }
@@ -40,7 +41,7 @@ export class IntentLifecycleService {
     const cursor = cursorRows[0];
     if (!cursor) throw new AppError("CURSOR_NOT_FOUND", "The knowledge cursor does not exist.", 409);
     const logicalIds = [...new Set(intentRows.map((intent) => intent.logicalIntentId))];
-    const graphHistory = (await Promise.all(logicalIds.map((id) => this.graphs.listForIntent(userId, id)))).flat();
+    const graphHistory = await this.graphs.listHistoryForIntentLogicalIds(userId, logicalIds);
     const latest = logicalIds.flatMap((id) => {
       const version = intentRows.filter((intent) => intent.logicalIntentId === id).sort((a, b) => b.version - a.version)[0];
       return version ? [version] : [];

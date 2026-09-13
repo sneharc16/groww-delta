@@ -30,7 +30,7 @@ export function CatchUpScreen() {
   async function acknowledge(body: { instrumentIds: string[]; throughSequence: number } | { scope: "ALL"; throughSequence: number }, key: string) {
     setBusy(key); setMessage(null);
     try {
-      await apiFetch("/api/catch-up/acknowledge", { method: "POST", body: JSON.stringify(body) });
+      await apiFetch("/api/catch-up/acknowledge", { method: "POST", headers: { "X-Delta-Environment": data!.replayEnvironment }, body: JSON.stringify(body) });
       await load();
       setMessage(key === "ALL" ? "You're caught up." : "Marked as seen.");
     } catch (caught: unknown) { setError(caught instanceof Error ? caught.message : "Could not mark this update as seen."); }
@@ -39,7 +39,7 @@ export function CatchUpScreen() {
 
   async function advanceDemo() {
     setBusy("ADVANCE"); setMessage(null);
-    try { await apiFetch("/api/demo/advance", { method: "POST" }); await load(); }
+    try { await apiFetch("/api/demo/advance", { method: "POST", headers: { "X-Delta-Position": data!.replayPosition } }); await load(); }
     catch (caught: unknown) { setError(caught instanceof Error ? caught.message : "Could not advance the demo market."); }
     finally { setBusy(null); }
   }
@@ -69,7 +69,8 @@ export function CatchUpScreen() {
   return (
     <>
       <div className="page-heading"><div><p className="eyebrow">The Living Watchlist</p><h1>Catch Up</h1><p>{sinceLabel}</p></div><DemoBadge /></div>
-      <TrustNotices notices={data.trustNotices} throughSequence={data.asOfSequence} onChanged={load} />
+      <details className="quiet-section card"><summary>How this demo works</summary><p>Prices and events are simulated. Advance the market, review why an update relates to your saved reason, then explicitly mark it seen. Viewing a page does not acknowledge it. Your browser has its own anonymous demo.</p><Link className="text-button" href="/demo">Open the guided demo</Link></details>
+      <TrustNotices notices={data.trustNotices} throughSequence={data.asOfSequence} environment={data.replayEnvironment} onChanged={load} />
       <MarketContextPanel context={data.marketContext} grouped={data.groupedMarketMoves} />
       {attentionCount === 0 ? (
         <section className="baseline-card card" data-testid="caught-up-state">

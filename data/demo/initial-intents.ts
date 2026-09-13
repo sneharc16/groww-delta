@@ -1,0 +1,38 @@
+export const seededIntents = [
+  {
+    id: "intent-version:tcs:earnings:1",
+    logicalIntentId: "intent:tcs:earnings",
+    instrumentId: "NSE:TCS",
+    type: "EARNINGS" as const,
+    originalText: "Watching Q2 margins",
+    structuredPayload: { focus: ["MARGINS"], quarterLabel: "Q2" },
+    provenanceSource: "RESULTS_CALENDAR" as const,
+  },
+  {
+    id: "intent-version:hdfcbank:price:1",
+    logicalIntentId: "intent:hdfcbank:price",
+    instrumentId: "NSE:HDFCBANK",
+    type: "PRICE_LEVEL" as const,
+    originalText: "Watching near ₹1,550",
+    structuredPayload: { targetPricePaise: 155000, mode: "NEAR", proximityBps: 100 },
+    provenanceSource: "MANUAL" as const,
+  },
+  {
+    id: "intent-version:tatamotors:technical:1",
+    logicalIntentId: "intent:tatamotors:technical",
+    instrumentId: "NSE:TATAMOTORS",
+    type: "TECHNICAL" as const,
+    originalText: "Watching for a breakout near ₹1,000",
+    structuredPayload: { setup: "BREAKOUT", referenceLevelPaise: 100000 },
+    provenanceSource: "SCREENER_NEAR_BREAKOUT" as const,
+  },
+  {
+    id: "intent-version:indigo:driver:1",
+    logicalIntentId: "intent:indigo:driver",
+    instrumentId: "NSE:INDIGO",
+    type: "DRIVER" as const,
+    originalText: "Watching fuel-cost conditions ahead of results",
+    structuredPayload: { driverKey: "FUEL_COST", description: "Track material fuel-cost changes relevant to the saved watch reason" },
+    provenanceSource: "MANUAL" as const,
+  },
+];

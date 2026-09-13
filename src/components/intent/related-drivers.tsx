@@ -1,7 +1,7 @@
 "use client";
 
 import { Link2, Pencil } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api/client";
 import type { DriverSuggestionDto, WatchGraphDto, WatchIntentDto } from "@/server/dto/types";
 import { Button } from "@/components/ui/button";
@@ -14,9 +14,12 @@ export function RelatedDrivers({ intents, onChanged }: { intents: WatchIntentDto
   const [suggestions, setSuggestions] = useState<Record<string, DriverSuggestionDto[]>>({});
   const [editing, setEditing] = useState<WatchIntentDto | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const requestGeneration = useRef({ generation: 0 });
   const load = useCallback(async () => {
+    const generation = ++requestGeneration.current.generation;
     try {
       const entries: Array<readonly [string, GraphResponse, DriverSuggestionDto[]]> = [];
       for (const intent of intents) {
@@ -24,15 +27,17 @@ export function RelatedDrivers({ intents, onChanged }: { intents: WatchIntentDto
         const suggested = await apiFetch<{ suggestions: DriverSuggestionDto[] }>(`/api/watch-intents/${intent.logicalIntentId}/driver-suggestions`);
         entries.push([intent.logicalIntentId, graph, suggested.suggestions] as const);
       }
+      if (generation !== requestGeneration.current.generation) return;
+      setError(null);
       setGraphs(Object.fromEntries(entries.map(([id, graph]) => [id, graph])));
       setSuggestions(Object.fromEntries(entries.map(([id, , value]) => [id, value])));
-    } catch {
-      setGraphs({});
-      setSuggestions({});
+    } catch (caught: unknown) {
+      if (generation !== requestGeneration.current.generation) return;
+      setError(caught instanceof Error ? caught.message : "Related drivers could not be loaded.");
     }
   }, [intents]);
 
-  useEffect(() => { const task = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(task); }, [load]);
+  useEffect(() => { const pending = requestGeneration.current; const task = window.setTimeout(() => void load(), 0); return () => { window.clearTimeout(task); pending.generation++; }; }, [load]);
 
   function openEditor(intent: WatchIntentDto) {
     const current = graphs[intent.logicalIntentId]?.current;
@@ -50,15 +55,18 @@ export function RelatedDrivers({ intents, onChanged }: { intents: WatchIntentDto
     try {
       await apiFetch(`/api/watch-intents/${editing.logicalIntentId}/graph`, {
         method: current ? "PATCH" : "POST",
+        headers: current ? { "If-Match": String(current.version) } : {},
         body: JSON.stringify({ templateKey: suggestion.templateKey, selectedNodeKeys: selected }),
       });
       await load();
       await onChanged();
       setEditing(null);
-    } finally { setBusy(false); }
+    } catch (caught: unknown) { setError(caught instanceof Error ? caught.message : "Related drivers could not be saved."); }
+    finally { setBusy(false); }
   }
 
   const configurable = intents.filter((intent) => (suggestions[intent.logicalIntentId]?.length ?? 0) > 0);
+  if (error) return <section className="card section-card" role="alert"><p>{error}</p><Button onClick={() => void load()}>Try again</Button></section>;
   if (!configurable.length) return null;
 
   return (

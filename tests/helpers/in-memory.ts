@@ -198,6 +198,7 @@ export class MemoryKnowledgeAcknowledgementRepository implements KnowledgeAcknow
 }
 
 export class MemoryWatchGraphRepository implements WatchGraphRepository {
+  async listHistoryForIntentLogicalIds(userId: string, logicalIntentIds: string[]) { return this.rows.filter(row => row.userId === userId && logicalIntentIds.includes(row.watchIntentLogicalId)).sort((a,b) => a.watchIntentLogicalId.localeCompare(b.watchIntentLogicalId) || b.version - a.version); }
   constructor(public rows: WatchGraphRecord[] = []) {}
   async listActiveForIntentLogicalIds(userId: string, ids: string[]) { return this.rows.filter((row) => row.userId === userId && ids.includes(row.watchIntentLogicalId) && row.status === "ACTIVE"); }
   async listForIntent(userId: string, id: string) { return this.rows.filter((row) => row.userId === userId && row.watchIntentLogicalId === id).sort((a, b) => b.version - a.version); }

@@ -1,7 +1,8 @@
+import { REFERENCE_POLICY } from "@/domain/policy/reference";
 import type { WatchGraphDraft } from "./types";
 
-export const MAX_GRAPH_DEPTH = 3;
-export const MAX_GRAPH_VISITED_NODES = 25;
+export const MAX_GRAPH_DEPTH = REFERENCE_POLICY.graph.maxDepth;
+export const MAX_GRAPH_VISITED_NODES = REFERENCE_POLICY.graph.maxNodes;
 
 export class GraphDomainError extends Error {
   constructor(public readonly code: string, message: string) {

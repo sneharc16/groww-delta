@@ -1,12 +1,13 @@
+import { REFERENCE_POLICY } from "@/domain/policy/reference";
 import type { WatchIntentRecord } from "@/domain/intent/types";
 import type { MarketEventRecord } from "@/domain/market/types";
 import type { GraphMatch, RelevancePathNode, WatchGraphRecord } from "./types";
 import { GraphDomainError, MAX_GRAPH_DEPTH, MAX_GRAPH_VISITED_NODES, validateGraphDraft } from "./validation";
 
-export const MIN_GRAPH_RELEVANCE = 50;
+export const MIN_GRAPH_RELEVANCE = REFERENCE_POLICY.graph.minimumRelevance;
 const blockedQualities = new Set(["STALE", "CONFLICTING"]);
 
-function pathsToTargets(graph: WatchGraphRecord, targetKeys: Set<string>): Array<{ path: RelevancePathNode[]; weight: number }> {
+function pathsToTargets(graph: WatchGraphRecord, targetKeys: Set<string>, metrics?: { graphNodesVisited: number }): Array<{ path: RelevancePathNode[]; weight: number }> {
   if (graph.nodes.length > MAX_GRAPH_VISITED_NODES) throw new GraphDomainError("GRAPH_VISITED_NODE_LIMIT", "Graph exceeds the visited-node limit.");
   if (new Set(graph.nodes.map((node) => node.id)).size !== graph.nodes.length) throw new GraphDomainError("DUPLICATE_GRAPH_NODE", "Graph node IDs must be unique.");
   const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
@@ -53,11 +54,13 @@ function pathsToTargets(graph: WatchGraphRecord, targetKeys: Set<string>): Array
       });
     }
   }
+  if (metrics) metrics.graphNodesVisited += visitedNodes.size;
   return results;
 }
 
 export function matchGraphEvents(input: {
   graph: WatchGraphRecord;
+  metrics?: { graphNodesVisited: number };
   intent: WatchIntentRecord;
   events: MarketEventRecord[];
   cursorSequence: number;
@@ -76,7 +79,7 @@ export function matchGraphEvents(input: {
       ? new Set(nodeKeys.has(event.subjectKey) ? [event.subjectKey] : [])
       : new Set(event.tags.filter((tag) => nodeKeys.has(tag)));
     if (!targets.size) continue;
-    const paths = pathsToTargets(input.graph, targets)
+    const paths = pathsToTargets(input.graph, targets, input.metrics)
       .map((candidate) => ({ ...candidate, relevance: Math.round(candidate.weight * 100) }))
       .filter((candidate) => candidate.relevance >= MIN_GRAPH_RELEVANCE)
       .sort((a, b) => b.relevance - a.relevance || b.path.length - a.path.length || a.path.map((node) => node.key).join(":").localeCompare(b.path.map((node) => node.key).join(":")));

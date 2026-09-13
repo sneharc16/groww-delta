@@ -63,19 +63,19 @@ export interface WatchIntentRepository {
 export interface DemoSessionRepository {
   getById(id: string): Promise<DemoStateRecord | null>;
   setPosition(id: string, step: number, sequence: number, time: Date): Promise<DemoStateRecord>;
-  resetScenario(id: string, scenarioId: string, time: Date, userId: string, baselines: CursorBaselineInput[]): Promise<DemoStateRecord>;
+  resetScenario(id: string, scenarioId: string, time: Date, userId: string, baselines: CursorBaselineInput[], scenarioVersion?: string): Promise<DemoStateRecord>;
   setProviderStatus(id: string, status: "HEALTHY" | "DEGRADED" | "UNAVAILABLE"): Promise<DemoStateRecord>;
 }
 
 export interface MarketSnapshotRepository {
-  findCurrent(instrumentId: string, currentSequence: number, scenarioId?: string): Promise<MarketSnapshotRecord | null>;
-  findCurrentMany(instrumentIds: string[], currentSequence: number, scenarioId?: string): Promise<MarketSnapshotRecord[]>;
-  listThroughSequence(instrumentId: string, currentSequence: number, scenarioId?: string): Promise<MarketSnapshotRecord[]>;
-  listForInstrumentsThrough(instrumentIds: string[], currentSequence: number, scenarioId?: string): Promise<MarketSnapshotRecord[]>;
+  findCurrent(instrumentId: string, currentSequence: number, scenarioId?: string, scenarioVersion?: string): Promise<MarketSnapshotRecord | null>;
+  findCurrentMany(instrumentIds: string[], currentSequence: number, scenarioId?: string, scenarioVersion?: string): Promise<MarketSnapshotRecord[]>;
+  listThroughSequence(instrumentId: string, currentSequence: number, scenarioId?: string, scenarioVersion?: string): Promise<MarketSnapshotRecord[]>;
+  listForInstrumentsThrough(instrumentIds: string[], currentSequence: number, scenarioId?: string, scenarioVersion?: string): Promise<MarketSnapshotRecord[]>;
 }
 
 export interface MarketEventRepository {
-  listBetweenSequences(exclusiveStart: number, inclusiveEnd: number, scenarioId?: string): Promise<MarketEventRecord[]>;
+  listBetweenSequences(exclusiveStart: number, inclusiveEnd: number, scenarioId?: string, scenarioVersion?: string): Promise<MarketEventRecord[]>;
 }
 
 export interface CursorBaselineInput {
@@ -125,6 +125,7 @@ export interface CreateWatchGraphInput {
 }
 
 export interface WatchGraphRepository {
+  listHistoryForIntentLogicalIds(userId: string, logicalIntentIds: string[]): Promise<WatchGraphRecord[]>;
   listActiveForIntentLogicalIds(userId: string, logicalIntentIds: string[]): Promise<WatchGraphRecord[]>;
   listForIntent(userId: string, logicalIntentId: string): Promise<WatchGraphRecord[]>;
   findActive(userId: string, logicalIntentId: string): Promise<WatchGraphRecord | null>;

@@ -227,3 +227,16 @@ Scenario ID plus generation isolate demo resets/switches. Retained configuration
 ### ADR-042: Honest trust vocabulary
 
 Use Current / Delayed / Unreliable / Corrected, never claims of official verification. Build 4 consumes resolved quality from the provider and does not implement reconciliation infrastructure.
+
+## Build 5 decisions
+
+- Anonymous browser sessions own independent mutable state; shared demo definitions stay immutable. No external identity provider is needed for this reference build.
+- Per-session command transactions include receipts and all nested repository writes. GET analysis is RepeatableRead and never acknowledges knowledge.
+- Client version/position/environment preconditions reject stale edits, replay advances and cross-generation acknowledgement.
+- The Build 4 policy is frozen, versioned and canonical-hashed. Offline presets cannot be selected through production APIs.
+- Traces come from the analyzer's bounded, normalized inputs and actual output, not reconstructed UI text. Wall-clock benchmark timing is kept outside deterministic decision identity.
+- Immutable versioned datasets coexist; installed-version pinning prevents silent replay changes.
+- Research JSONL/CSV provide a stable external interface without UI scraping or a heavy scientific dependency.
+- SQL-event counts demonstrate a lifecycle N+1 query; batch historical graph loading repairs it without changing history meaning.
+- Accessibility fixes preserve the established layout and semantic color roles.
+- No measurement is presented as an effectiveness result, causal financial finding or production SLA.

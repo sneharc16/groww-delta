@@ -1,4 +1,6 @@
+import { SCENARIO_IDENTITIES, scenarioIdentity, datasetRecordId } from "../data/replay/versioning";
 import "dotenv/config";
+import { seededIntents } from "../data/demo/initial-intents";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, Prisma } from "../src/generated/prisma/client";
 import { defaultReplayScenario, replayInstruments } from "../data/replay/default-scenario";
@@ -11,44 +13,7 @@ if (!connectionString) throw new Error("DATABASE_URL is required for seeding.");
 
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString, max: 1 }) });
 
-const seededIntents = [
-  {
-    id: "intent-version:tcs:earnings:1",
-    logicalIntentId: "intent:tcs:earnings",
-    instrumentId: "NSE:TCS",
-    type: "EARNINGS" as const,
-    originalText: "Watching Q2 margins",
-    structuredPayload: { focus: ["MARGINS"], quarterLabel: "Q2" },
-    provenanceSource: "RESULTS_CALENDAR" as const,
-  },
-  {
-    id: "intent-version:hdfcbank:price:1",
-    logicalIntentId: "intent:hdfcbank:price",
-    instrumentId: "NSE:HDFCBANK",
-    type: "PRICE_LEVEL" as const,
-    originalText: "Watching near ₹1,550",
-    structuredPayload: { targetPricePaise: 155000, mode: "NEAR", proximityBps: 100 },
-    provenanceSource: "MANUAL" as const,
-  },
-  {
-    id: "intent-version:tatamotors:technical:1",
-    logicalIntentId: "intent:tatamotors:technical",
-    instrumentId: "NSE:TATAMOTORS",
-    type: "TECHNICAL" as const,
-    originalText: "Watching for a breakout near ₹1,000",
-    structuredPayload: { setup: "BREAKOUT", referenceLevelPaise: 100000 },
-    provenanceSource: "SCREENER_NEAR_BREAKOUT" as const,
-  },
-  {
-    id: "intent-version:indigo:driver:1",
-    logicalIntentId: "intent:indigo:driver",
-    instrumentId: "NSE:INDIGO",
-    type: "DRIVER" as const,
-    originalText: "Watching fuel-cost conditions ahead of results",
-    structuredPayload: { driverKey: "FUEL_COST", description: "Track material fuel-cost changes relevant to the saved watch reason" },
-    provenanceSource: "MANUAL" as const,
-  },
-];
+
 
 async function main() {
   await prisma.user.upsert({
@@ -147,31 +112,25 @@ async function main() {
   await prisma.instrument.upsert({ where: { id: PRIMARY_BENCHMARK }, update: { kind: "INDEX", isWatchlistEligible: false }, create: {
     id: PRIMARY_BENCHMARK, symbol: "NIFTY50", exchange: "NSE", name: "Nifty 50", sector: null, currency: "INR", kind: "INDEX", isWatchlistEligible: false,
   } });
+  for (const identity of SCENARIO_IDENTITIES) {
+    const existing = await prisma.replayDataset.findUnique({ where: { scenarioId_version: { scenarioId: identity.scenarioId, version: identity.scenarioVersion } } });
+    if (existing && existing.contentHash !== identity.scenarioContentHash) throw new Error("Immutable replay dataset hash mismatch.");
+    await prisma.replayDataset.upsert({ where: { scenarioId_version: { scenarioId: identity.scenarioId, version: identity.scenarioVersion } }, update: {}, create: { scenarioId: identity.scenarioId, version: identity.scenarioVersion, contentHash: identity.scenarioContentHash } });
+  }
   for (const scenario of replayScenarios) {
+  const { scenarioVersion } = scenarioIdentity(scenario);
   for (const step of scenario.steps) {
     for (const snapshot of step.snapshots) {
-      const id = scenario.id === "groww-delta-default" ? `snapshot:${step.sequence}:${snapshot.instrumentId}` : `snapshot:${scenario.id}:${step.sequence}:${snapshot.instrumentId}`;
+      const sourceId = scenario.id === "groww-delta-default" ? `snapshot:${step.sequence}:${snapshot.instrumentId}` : `snapshot:${scenario.id}:${step.sequence}:${snapshot.instrumentId}`;
+      const id = datasetRecordId(sourceId, scenarioVersion);
       await prisma.marketSnapshot.upsert({
         where: { id },
-        update: {
-          scenarioId: scenario.id,
-          eventTime: new Date(Date.parse(step.eventTime) - (snapshot.delaySeconds ?? 0) * 1000),
-          receivedTime: new Date(step.eventTime),
-          pricePaise: snapshot.pricePaise,
-          openPaise: snapshot.openPaise,
-          highPaise: snapshot.highPaise,
-          lowPaise: snapshot.lowPaise,
-          cumulativeVolume: snapshot.cumulativeVolume,
-          expectedCumulativeVolume: snapshot.expectedCumulativeVolume,
-          expectedStepMoveBps: snapshot.expectedStepMoveBps,
-          source: "ReplayMarketProvider",
-          quality: snapshot.quality ?? "FRESH",
-        },
+        update: {},
         create: {
           id,
           instrumentId: snapshot.instrumentId,
           sequence: step.sequence,
-          scenarioId: scenario.id,
+          scenarioId: scenario.id, scenarioVersion,
           eventTime: new Date(Date.parse(step.eventTime) - (snapshot.delaySeconds ?? 0) * 1000),
           receivedTime: new Date(step.eventTime),
           pricePaise: snapshot.pricePaise,
@@ -188,28 +147,26 @@ async function main() {
     }
   }
 
-  for (const event of scenario.events) {
+  const revisions = new Map<string, number>();
+  for (const event of [...scenario.events].sort((a, b) => a.sequence - b.sequence || a.id.localeCompare(b.id))) {
+    const previousRevision = event.correctionOfId ? revisions.get(event.correctionOfId) : 0;
+    if (previousRevision === undefined) throw new Error("Correction must reference an earlier event in this dataset.");
+    const eventVersion = previousRevision + 1;
+    revisions.set(event.id, eventVersion);
     await prisma.marketEvent.upsert({
-      where: { id: event.id },
-      update: {
-        eventTime: new Date(event.eventTime),
-        receivedTime: new Date(event.receivedTime ?? event.eventTime),
-        scenarioId: scenario.id,
-        correctionOfId: event.correctionOfId ?? null,
-        quality: event.quality ?? "FRESH",
-        subjectType: event.subjectType,
-        subjectKey: event.subjectKey,
-        tags: event.tags,
-        payload: event.payload as Prisma.InputJsonValue,
-      },
+      where: { id: datasetRecordId(event.id, scenarioVersion) },
+      update: {},
       create: {
         ...event,
+        id: datasetRecordId(event.id, scenarioVersion),
         eventTime: new Date(event.eventTime),
         receivedTime: new Date(event.receivedTime ?? event.eventTime),
-        scenarioId: scenario.id,
-        correctionOfId: event.correctionOfId ?? null,
+        scenarioId: scenario.id, scenarioVersion,
+        correctionOfId: event.correctionOfId ? datasetRecordId(event.correctionOfId, scenarioVersion) : null,
         quality: event.quality ?? "FRESH",
         source: "ReplayMarketProvider",
+        sourceEventId: event.id,
+        eventVersion,
         payload: event.payload as Prisma.InputJsonValue,
       },
     });

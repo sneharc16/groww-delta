@@ -3,7 +3,7 @@ export default defineConfig({
   resolve: { alias: { "@": `${import.meta.dirname}/src` } },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts", "tests/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx", "tests/**/*.test.ts"],
     coverage: { reporter: ["text", "html"] },
   },
 });

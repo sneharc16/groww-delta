@@ -1,12 +1,7 @@
+import { REFERENCE_POLICY, type AttentionPolicy } from "@/domain/policy/reference";
 import type { AttentionLane } from "./types";
 
-export const QUALITY_CONFIDENCE = {
-  FRESH: 100,
-  DELAYED: 70,
-  STALE: 30,
-  CONFLICTING: 0,
-  CORRECTED: 80,
-} as const;
+export const QUALITY_CONFIDENCE = REFERENCE_POLICY.qualityConfidence;
 
 export function calculateAttentionScore(values: {
   significance: number;
@@ -14,17 +9,13 @@ export function calculateAttentionScore(values: {
   novelty: number;
   urgency: number;
   confidence: number;
-}): number {
-  const score = 0.30 * values.significance
-    + 0.35 * values.relevance
-    + 0.15 * values.novelty
-    + 0.10 * values.urgency
-    + 0.10 * values.confidence;
+}, policy: AttentionPolicy = REFERENCE_POLICY): number {
+  const score = Object.entries(policy.weights).reduce((sum, [key, weight]) => sum + weight * values[key as keyof typeof values], 0);
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
-export function classifyLane(relevance: number, significance: number): AttentionLane {
+export function classifyLane(relevance: number, significance: number, policy: AttentionPolicy = REFERENCE_POLICY): AttentionLane {
   if (relevance > 0) return "RELEVANT";
-  if (significance >= 50) return "SIGNIFICANT";
+  if (significance >= policy.significantLaneThreshold) return "SIGNIFICANT";
   return "QUIET";
 }

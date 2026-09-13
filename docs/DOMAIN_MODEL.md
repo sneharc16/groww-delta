@@ -80,3 +80,11 @@ Resolvable structured intents become `RESOLUTION_ELIGIBLE` only after a matching
 - **AttentionItem:** trust metadata, trusted baseline reference, market-relative delta and grouped state extend the existing single analysis result. Formula and direct/graph semantics remain intact.
 
 Demo namespace rebasing is explicit orchestration only. Within an uninterrupted run new intent/graph versions cannot interpret prior events. Between runs retained user configuration begins at the new baseline; old acknowledgement records remain stored but do not become assertions about the new run.
+
+## Build 5 isolation and reproducibility
+
+AnonymousSession stores a random session identity, hashed bearer token, expiry, unique User/DemoSession ownership and grouped-move disclosure preference. MutationReceipt uniquely binds session+action key to a request hash and committed response.
+
+ReplayDataset identifies scenario+version+content hash. Snapshots/events carry scenarioVersion; events add sourceEventId and eventVersion while correctionOfId remains append-only lineage. DemoSession pins its dataset version. Queries cannot mix versions; new versions receive distinct durable record IDs.
+
+AttentionDecisionTrace is derived, not market truth. It records policy/scenario hashes, actual evidence and interpretation versions, cursor state, component decisions, explanations and trust/context metadata. Research run manifests separately retain wall-clock execution, code/source identity and seed.

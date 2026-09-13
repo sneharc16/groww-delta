@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowLeft, Check } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AttentionItemDto, CatchUpDto, DemoStateDto, WatchIntentDto, WatchLifecycleDto, WatchlistDto, WatchlistItemDto } from "@/server/dto/types";
 import { apiFetch } from "@/lib/api/client";
 import { formatCompactNumber, formatINRFromPaise, formatISTTime } from "@/lib/format/market";
@@ -20,11 +20,13 @@ export function StockDetailScreen({ symbol }: { symbol: string }) {
   const [item, setItem] = useState<WatchlistItemDto | null>(null);
   const [intents, setIntents] = useState<WatchIntentDto[]>([]);
   const [demo, setDemo] = useState<DemoStateDto | null>(null);
+  const [environment, setEnvironment] = useState("");
   const [attention, setAttention] = useState<AttentionItemDto | null>(null);
   const [lifecycle, setLifecycle] = useState<WatchLifecycleDto>({ lifecycle: [], timeline: [] });
   const [trustNotices, setTrustNotices] = useState<TrustNotice[]>([]);
   const [editing, setEditing] = useState<WatchIntentDto | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
+  const active = useMemo(() => intents.filter((intent) => intent.status === "ACTIVE"), [intents]);
   const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -36,13 +38,12 @@ export function StockDetailScreen({ symbol }: { symbol: string }) {
       setTrustNotices(catchUp.trustNotices.filter((notice) => notice.instrumentId === found.instrument.id || notice.instrumentId === null));
       setItem(found);
       setDemo(demoState);
-      setAttention([...catchUp.relevant, ...catchUp.significant, ...catchUp.quiet].find((candidate) => candidate.instrument.id === found.instrument.id) ?? null);
+      const analyzed = [...catchUp.relevant, ...catchUp.significant, ...catchUp.quiet].find((candidate) => candidate.instrument.id === found.instrument.id);
+      if (!analyzed) throw new Error("Analysis is unavailable for this instrument.");
+      setAttention(analyzed);
+      setEnvironment(catchUp.replayEnvironment);
       const history = await apiFetch<{ intents: WatchIntentDto[] }>(`/api/watch-intents?instrumentId=${encodeURIComponent(found.instrument.id)}`);
-      try {
-        setLifecycle(await apiFetch<WatchLifecycleDto>(`/api/watch-lifecycle?instrumentId=${encodeURIComponent(found.instrument.id)}`));
-      } catch {
-        setLifecycle({ lifecycle: [], timeline: [] });
-      }
+      setLifecycle(await apiFetch<WatchLifecycleDto>(`/api/watch-lifecycle?instrumentId=${encodeURIComponent(found.instrument.id)}`));
       setIntents(history.intents);
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : "Could not load this instrument.");
@@ -64,6 +65,7 @@ export function StockDetailScreen({ symbol }: { symbol: string }) {
     const current = editing ?? null;
     await apiFetch(current ? `/api/watch-intents/${current.logicalIntentId}` : "/api/watch-intents", {
       method: current ? "PATCH" : "POST",
+      headers: current ? { "If-Match": String(current.version) } : {},
       body: JSON.stringify(current ? input : { instrumentId: item.instrument.id, intent: input }),
     });
     await load();
@@ -71,32 +73,37 @@ export function StockDetailScreen({ symbol }: { symbol: string }) {
   }
 
   async function archiveIntent(intent: WatchIntentDto) {
+    try {
     await apiFetch(`/api/watch-intents/${intent.logicalIntentId}/archive`, { method: "POST" });
     await load();
     setToast("Watch reason archived");
+    } catch (caught: unknown) { setError(caught instanceof Error ? caught.message : "Could not archive the reason."); }
   }
 
   async function markSeen() {
     if (!item || !attention) return;
-    await apiFetch("/api/catch-up/acknowledge", { method: "POST", body: JSON.stringify({ instrumentIds: [item.instrument.id], throughSequence: attention.toSequence }) });
+    try {
+    await apiFetch("/api/catch-up/acknowledge", { method: "POST", headers: { "X-Delta-Environment": environment }, body: JSON.stringify({ instrumentIds: [item.instrument.id], throughSequence: attention.toSequence }) });
     await load();
     setToast("Marked as seen");
+    } catch (caught: unknown) { setError(caught instanceof Error ? caught.message : "Could not acknowledge the update."); }
   }
 
   async function lifecycleAction(action: "resolve" | "keep" | "renew", logicalIntentId: string) {
+    try {
     await apiFetch(`/api/watch-intents/${logicalIntentId}/${action}`, {
       method: "POST",
       ...(action === "renew" ? { body: JSON.stringify({}) } : {}),
     });
     await load();
     setToast(action === "resolve" ? "Watch reason resolved" : action === "renew" ? "Watching the next cycle" : "Kept this watch reason active");
+    } catch (caught: unknown) { setError(caught instanceof Error ? caught.message : "Could not update the watch reason."); }
   }
 
   if (!item && !error) return <LoadingState label="Loading simulated market data…" />;
   if (error) return <ErrorState message={error} retry={() => void load()} />;
   if (!item) return null;
   const snapshot = item.snapshot;
-  const active = intents.filter((intent) => intent.status === "ACTIVE");
   const hasAttention = attention !== null && attention.lane !== "QUIET";
 
   return (
@@ -106,7 +113,7 @@ export function StockDetailScreen({ symbol }: { symbol: string }) {
         <div><div className="symbol-line"><h1>{item.instrument.symbol}</h1><span>{item.instrument.exchange}</span></div><p>{item.instrument.name}</p><DemoBadge /></div>
         {snapshot ? <Price pricePaise={snapshot.pricePaise} changePercent={snapshot.dayChangePercent} large /> : null}
       </div>
-      <TrustNotices notices={trustNotices} throughSequence={demo?.currentSequence ?? 0} onChanged={load} />
+      <TrustNotices notices={trustNotices} throughSequence={demo?.currentSequence ?? 0} environment={environment} onChanged={load} />
       {attention ? <p className="data-status" data-testid="stock-data-status">{attention.trust.label} · observed {formatISTTime(attention.trust.eventTime)} IST · {attention.trust.source}</p> : null}
       <div className="two-column">
         <div className="stack">

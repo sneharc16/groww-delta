@@ -1,405 +1,47 @@
-# Groww Delta
+# Groww Delta — The Living Watchlist
 
-> A living watchlist that remembers **why you are watching**, **what you already know**, and **what changed that actually matters**.
+A deterministic, explainable watchlist that remembers why you are watching, what you acknowledged, and which new changes relate to your saved reasons. All market data is simulated. No investment recommendations, trading, AI APIs or live market integration.
 
-**Live Demo:** https://groww-delta-dusky.vercel.app/\
-**GitHub:** https://github.com/sneharc16/groww-delta
+Build 5 hardens the Build 4 reference semantics with isolated anonymous sessions, transactional mutations, versioned policy/replay hashes, decision traces and offline research exports. The main product remains Catch Up → understand why → acknowledge → review the watch reason.
 
----
+## Run locally
 
-## Problem
+Node 22.17.0, pnpm 11.25.0 and PostgreSQL are required.
 
-A traditional watchlist remembers *which stocks* a user follows, but not *why* they are following them.
-
-As the list grows, users repeatedly scan prices, news, results and alerts to answer a simple question:
-
-> **Did anything happen that actually matters to me?**
-
-The same update can also appear repeatedly even after the user has already seen it, while important contextual events may be missed because the stock itself has barely moved.
-
----
-
-## Product Pitch
-
-Groww Delta turns a watchlist into a memory of why each stock matters. Users save a watch reason, and Delta compares new market states with what they have already seen. A deterministic Attention Engine classifies updates as Relevant, Significant or Quiet, while a user-confirmed Driver Graph surfaces contextual changes such as crude oil affecting IndiGo through fuel costs. We chose persistent server-side state, bounded traversal and explainable rules for reproducibility and trust. Build 4 adds provider-resolved data trust, correction handling, Calm Mode and corporate-action safeguards through deterministic replay. Live-provider integration and production reconciliation remain out of scope.
-
----
-
-## What Groww Delta Does
-
-Delta introduces three pieces of state that a normal watchlist does not retain:
-
-- **Watch Intent** — why the user is watching a stock
-- **Knowledge Cursor** — what the user has already seen
-- **Driver Graph** — user-confirmed relationships that can make an external event relevant
-
-New information is then classified into:
-
-- **Relevant** — directly or contextually matches the user's reason
-- **Significant** — important market movement even without an intent match
-- **Quiet** — does not deserve the user's attention
-
-Once an update is acknowledged, the Knowledge Cursor advances so the same information does not keep resurfacing.
-
----
-
-## Architecture
-
-Groww Delta is implemented as a **layered monolith**: simple to deploy, but with business logic separated from presentation and persistence.
-
-```mermaid
-flowchart TB
-
-    U[User]
-
-    subgraph UI["Presentation"]
-        CU[Catch Up]
-        WL[Watchlist]
-        SD[Stock Detail]
-        DEMO[Demo Controls]
-    end
-
-    subgraph APP["Application Services"]
-        CS[Catch-Up Service]
-        WS[Watchlist Service]
-        AS[Acknowledgement Service]
-        DS[Replay Service]
-        LS[Lifecycle Service]
-    end
-
-    subgraph DOMAIN["Domain"]
-        AE[Attention Engine]
-        IM[Intent Matching]
-        KC[Knowledge Cursor]
-        DG[Driver Graph]
-        SG[Significance Analysis]
-    end
-
-    subgraph DATA["Data"]
-        RP[Replay Market Provider]
-        PR[Prisma]
-        DB[(PostgreSQL / Neon)]
-    end
-
-    U --> UI
-
-    CU --> CS
-    WL --> WS
-    SD --> WS
-    DEMO --> DS
-
-    CS --> AE
-    AS --> KC
-
-    AE --> IM
-    AE --> SG
-    AE --> DG
-    AE --> KC
-    CS --> RP
-
-    CS --> PR
-    WS --> PR
-    AS --> PR
-    DS --> PR
-    LS --> PR
-
-    PR --> DB
-```
-
----
-
-## User Journey
-
-```mermaid
-flowchart TD
-
-    A[Add Stock] --> B[Save Watch Reason]
-    B --> C[Optional: Confirm Drivers]
-    C --> D[Market State Changes]
-
-    D --> E{Deserves Attention?}
-
-    E -->|No| F[You're Caught Up]
-    E -->|Intent Match| G[Relevant]
-    E -->|Unusual Move| H[Significant]
-    E -->|Driver Match| I[Contextually Relevant]
-
-    G --> J[Explain Why]
-    H --> J
-    I --> J
-
-    J --> K[User Reviews Update]
-    K --> L[Mark Seen / Mark All Caught Up]
-    L --> M[Advance Knowledge Cursor]
-
-    M --> N{Watch Reason Fulfilled?}
-
-    N -->|No| D
-    N -->|Yes| O[Resolve / Change / Keep Watching]
-```
-
----
-
-## Attention Engine
-
-The ranking logic is deterministic and explainable.
-
-```text
-Attention =
-    0.30 × Significance
-  + 0.35 × Relevance
-  + 0.15 × Novelty
-  + 0.10 × Urgency
-  + 0.10 × Confidence
-```
-
-A direct Watch Intent match receives maximum relevance.
-
-Contextual relevance can also come from the user-confirmed Driver Graph. For example:
-
-```text
-IndiGo → Fuel Cost → Crude
-```
-
-A material crude-oil event can therefore become relevant to an IndiGo watch reason even when IndiGo itself barely moves.
-
-Graph traversal is bounded to keep contextual reasoning predictable:
-
-```text
-Maximum depth:                  3
-Maximum visited nodes:          25
-Minimum contextual relevance:   50
-```
-
----
-
-## Demo Walkthrough
-
-The default scenario includes a deterministic five-step replay so evaluators can reproduce the important behaviours without relying on live financial APIs.
-
-| Step | Expected behaviour |
-|---|---|
-| **0 — Baseline** | All 5 stocks are quiet |
-| **1 — Normal movement** | Prices move, but nothing deserves attention |
-| **2 — Meaningful changes** | 4 Relevant + 1 Significant |
-| **3 — Novelty test** | Acknowledged information does not repeat |
-| **4 — Contextual relevance** | IndiGo surfaces through `IndiGo → Fuel Cost → Crude` |
-
-### Quick evaluation flow
-
-1. Open the **Demo** tab.
-2. Click **Reset scenario**.
-3. Advance to Step 1 and open **Catch Up** — the user should remain caught up.
-4. Advance to Step 2 — four watch reasons should match and Reliance should appear as Significant.
-5. Click **Mark all caught up**.
-6. Advance to Step 3 — the old information should not return.
-7. Advance to Step 4 — IndiGo should surface because crude moved materially through the confirmed fuel-cost relationship.
-
-All replay data is explicitly labelled **SIMULATED · DEMO DATA**.
-
----
-
-## Build 4 — Trust and Resilience
-
-Build 4 preserves the default demo and adds three selectable scenarios:
-
-- **Data Quality:** stale → fresh confirmation, disputed events, a 45-second delay, and corrected results.
-- **Market Shock:** broad-market grouping with explicit watch conditions preserved and benchmark-relative changes still surfaced.
-- **Corporate Action:** split-aware reference review; updating a saved level always creates a new intent version.
-
-Trust Notices are separate from attention lanes. Last confirmed data stays available during provider degradation. No live market API, LLM, recommendation, or production multi-provider reconciler is included.
-
-See [Build 4](docs/BUILD4.md), [adversarial audit](docs/BUILD4_AUDIT.md), [architecture](docs/ARCHITECTURE.md), [domain model](docs/DOMAIN_MODEL.md), and [decisions](docs/DECISIONS.md).
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Frontend / Server | Next.js 16, React 19 |
-| Language | TypeScript |
-| Database | PostgreSQL |
-| ORM | Prisma 7 |
-| Production DB | Neon |
-| Validation | Zod |
-| Testing | Vitest + Playwright |
-| Deployment | Vercel |
-| Package Manager | pnpm |
-
----
-
-## Local Setup
-
-### Prerequisites
-
-Install:
-
-- Node.js 22+
-- pnpm
-- PostgreSQL, or use a hosted PostgreSQL database such as Neon
-
-The repository uses:
-
-```text
-pnpm@11.25.0
-```
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/sneharc16/groww-delta.git
-cd groww-delta
-```
-
-### 2. Install dependencies
-
-```bash
-pnpm install
-```
-
-### 3. Configure the database
-
-Copy the environment example:
-
-```bash
+```sh
+corepack enable
+pnpm install --frozen-lockfile
 cp .env.example .env
-```
-
-Docker Compose is supported locally: run `pnpm db:up` and use the connection details in `.env.example`, or configure an existing PostgreSQL database.
-
-Set:
-
-```env
-DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DATABASE
-```
-
-Do not commit real database credentials.
-
-### 4. Generate Prisma Client
-
-```bash
-pnpm db:generate
-```
-
-### 5. Apply migrations
-
-```bash
+pnpm db:up
 pnpm db:migrate:deploy
-```
-
-### 6. Seed the deterministic demo
-
-```bash
 pnpm db:seed
-```
-
-### 7. Start the application
-
-```bash
 pnpm dev
 ```
 
-Open:
+Open http://localhost:3000. Each browser gets its own server-generated anonymous session. Advance the default demo to Step 2, mark all caught up, then advance through Steps 3 and 4. Resilience scenarios are available under Demo.
 
-```text
-http://localhost:3000
-```
+## Verify and reproduce
 
----
-
-## Validation
-
-Useful commands:
-
-```bash
-pnpm lint
-pnpm typecheck
-pnpm test
+```sh
+pnpm verify
 pnpm test:db
 pnpm test:seed
-pnpm test:scenarios
-pnpm build
+pnpm exec playwright install chromium
 PLAYWRIGHT_USE_BUILD=true pnpm test:e2e
+pnpm research:export
+pnpm benchmark
 ```
 
-`DATABASE_URL` must be configured for both build and runtime. `test:seed` verifies two idempotent seeds; `test:db` verifies cursor/history transactions using isolated test records. `test:scenarios` exercises demo configuration and restores the default baseline. Browser tests require Chromium (`pnpm exec playwright install chromium`). The production-server option avoids development compilation delays; the webpack compiler remains unchanged.
+See [Reproducibility](docs/REPRODUCIBILITY.md) for exact environment/deployment/replay commands, [Build 5](docs/BUILD5.md) for engineering validation and limitations, [Audit](docs/BUILD5_AUDIT.md), and [Research handoff](docs/RESEARCH_HANDOFF.md) for the frozen policy and export contract.
 
-The current build includes:
+## Architecture
 
-- 163 unit / service / integration tests
-- 11 Playwright end-to-end tests
-- strict TypeScript validation
-- lint validation
-- production build validation
-- database migration validation
+React → Next route/session boundary → application services → domain rules/repository interfaces → Prisma/PostgreSQL. MarketDataProvider isolates replay. Attention, graph, knowledge, trust and policy logic do not depend on React. Research instrumentation uses the same analyzer outside the UI. [Architecture details](docs/ARCHITECTURE.md).
 
----
-
-## Key Engineering Choices
-
-**Deterministic attention logic**\
-The decision path remains reproducible and inspectable instead of relying on an opaque ranking model.
-
-**Server-side source of truth**\
-Watch reasons, acknowledgements, lifecycle state and replay position are persisted rather than stored only in the browser.
-
-**Bounded contextual reasoning**\
-Driver relationships are user-confirmed and traversal is deliberately limited.
-
-**Layered monolith**\
-The project keeps clear domain boundaries without introducing unnecessary distributed-system complexity.
-
-**Reproducible demo data**\
-Evaluation does not depend on external market APIs or their availability.
-
----
-
-## Project Structure
-
-```text
-groww-delta/
-├── data/replay/        # deterministic market scenario
-├── docs/               # design/build documentation
-├── prisma/             # schema, migrations and seed
-├── src/
-│   ├── app/            # UI and API routes
-│   ├── domain/         # attention, intent and graph logic
-│   └── server/         # application services, repositories and providers
-├── tests/
-├── package.json
-└── README.md
-```
-
----
-
-## Safety
-
-Groww Delta is an information-attention prototype.
-
-It:
-
-- does not place trades,
-- does not recommend buying or selling securities,
-- uses simulated market information for the demo,
-- and explains why each surfaced item earned attention.
-
----
+The previous public demo is [hosted here](https://groww-delta-dusky.vercel.app/); its deployment version is not changed automatically by this branch. Source: [sneharc16/groww-delta](https://github.com/sneharc16/groww-delta).
 
 ## Author
 
-**Sneha Roychowdhury**\
-Final Year Undergraduate\
-B.Tech Electronics and Communication Engineering - Artificial Intelligence (ECE-AI)\
-Indira Gandhi Delhi Technical University for Women (IGDTUW), Delhi
+Sneha Roychowdhury · B.Tech ECE-AI, IGDTUW, Delhi. [GitHub](https://github.com/sneharc16) · [LinkedIn](https://www.linkedin.com/in/snehaaroychowdhury/).
 
-**GitHub:** https://github.com/sneharc16\
-**LinkedIn:** https://www.linkedin.com/in/snehaaroychowdhury/
-
----
-
-## Disclaimer
-
-Groww Delta is a prototype created for demonstration purposes using simulated market data. It is not investment advice, financial research, or a trading system.
-
-## Provider extension point
-
-`src/server/market/providers/market-data-provider.ts` is the market-read contract; `src/server/container.ts` selects its implementation. All current data comes from ReplayMarketProvider. Provider reconciliation is documented in Build 4 but is not implemented.
+This is a simulated information-attention reference implementation, not investment advice or a trading system. Curated demos test correctness; they are not evidence of real-world relevance or financial outcomes.
