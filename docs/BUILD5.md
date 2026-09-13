@@ -35,7 +35,7 @@ Resilience regressions preserve stale/conflicting suppression; delayed confirmat
 
 ## Audit and measured performance
 
-[BUILD5_AUDIT.md](BUILD5_AUDIT.md) records eleven demonstrated repairs, reproductions and regressions. Historical semantics, temporal bounds, graph subject authority, trust, correction lineage and research isolation were cross-checked, not just inferred from passing tests.
+[BUILD5_AUDIT.md](BUILD5_AUDIT.md) records thirteen demonstrated repairs, reproductions and regressions. Historical semantics, temporal bounds, graph subject authority, trust, correction lineage and research isolation were cross-checked, not just inferred from passing tests.
 
 Hardware: Apple M1, 8 logical CPUs, 8 GiB RAM, macOS arm64, Node 22.17.0. Offline benchmark: 3 warmups, 20 measured samples per size; full domain computation including traces, not SQL/network/UI.
 
@@ -72,7 +72,7 @@ Vercel-compatible Node deployment remains supported. Run migrations/seed as rele
 
 - Lint and strict typecheck passed.
 - 180 unit/service/research invariants passed, including all 163 Build 4 tests.
-- Complete 19-flow browser run passed, including expiry recovery, stale-tab protection, session/preferences isolation and the original eleven flows.
+- All 21 browser flows passed: expiry recovery, stale-tab/correction protection, fallback-font/mobile layout, session/preferences isolation and the original eleven flows.
 - Production build passed.
 - All seven migrations applied without reset; double seed passed with unchanged counts/state.
 - Physical database concurrency/rollback/immutability/version isolation passed.

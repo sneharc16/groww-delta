@@ -21,7 +21,7 @@ export function TrustNotices({ notices, throughSequence, environment, onChanged 
     if (!notice.instrumentId) return;
     setBusy(true);
     try {
-      await apiFetch("/api/catch-up/acknowledge", { method: "POST", body: JSON.stringify({ instrumentIds: [notice.instrumentId], throughSequence }) });
+      await apiFetch("/api/catch-up/acknowledge", { method: "POST", headers: environment ? { "X-Delta-Environment": environment } : {}, body: JSON.stringify({ instrumentIds: [notice.instrumentId], throughSequence }) });
       await onChanged();
     } catch (caught: unknown) { setError(caught instanceof Error ? caught.message : "Could not acknowledge this update."); }
     finally { setBusy(false); }

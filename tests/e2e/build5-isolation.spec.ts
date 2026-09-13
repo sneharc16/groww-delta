@@ -86,3 +86,19 @@ test("a corrupt session fails explicitly and supports deliberate recovery",async
   await page.getByRole("button",{name:"Start a new anonymous demo"}).click();
   await expect(page.getByTestId("caught-up-state")).toBeVisible();
 });
+
+test("a stale correction notice cannot acknowledge a reset replay", async ({ page }) => {
+  const request = page.request;
+  await request.post("/api/demo/scenario", { data: { scenarioId: "data-quality" } });
+  await advance(request, 5);
+  await request.post("/api/catch-up/acknowledge", { data: { instrumentIds: ["NSE:TCS"], throughSequence: 5 } });
+  await advance(request, 1);
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "Mark correction seen" })).toBeVisible();
+  await request.post("/api/demo/reset");
+  await advance(request, 6);
+  await page.getByRole("button", { name: "Mark correction seen" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "This replay was reset or switched" })).toBeVisible();
+  const current = await (await request.get("/api/catch-up")).json();
+  expect(current.relevant.some((item: { instrument: { id: string } }) => item.instrument.id === "NSE:TCS")).toBe(true);
+});

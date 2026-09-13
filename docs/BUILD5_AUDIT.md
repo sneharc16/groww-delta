@@ -5,7 +5,7 @@ All 163 original domain/service/integration tests passed before changes. Scienti
 
 ## Demonstrated findings and repairs
 
-Eleven defects were reproduced and repaired. New requirements and defensive additions are listed separately; they are not inflated into defect counts.
+Thirteen defects were reproduced and repaired. New requirements and defensive additions are listed separately; they are not inflated into defect counts.
 
 | ID | Defect and reproduction | Root cause / repair | Regression evidence |
 | --- | --- | --- | --- |
@@ -20,6 +20,8 @@ Eleven defects were reproduced and repaired. New requirements and defensive addi
 | D9 | Injected stock-history 503 did not show an error (browser test failed). | Stock Detail catch replaced history/lifecycle with empty arrays. Propagate failure to explicit retry UI; catch mutation failures too. | Stock-history browser failure-injection test. |
 | D10 | A stale tab acknowledged sequence 2 of a different reset generation (expected 409, received 200). | Client knowledge command lacked observed environment context. Add scenario/generation precondition, carried by consumer acknowledgement controls. | Stale-tab test asserts 409 and unchanged 4/1/0 attention. |
 | D11 | Measured lifecycle graph-history query count grew from 11 (one intent) to 38 (ten intents). | One graph-history lookup per logical intent, each with relation reads. Batch all historical graphs/relations for the instrument’s intent IDs. | Database benchmark query-growth assertion failed before batching; after repair both one- and ten-intent reads use 11 queries. Retained as a regression. |
+| D12 | Linux CI failed three existing mobile overflow assertions; Verdana on macOS reproduced a demo badge extending to x=396.28 at a 390px viewport. | Header flex row assumed platform-specific text widths. Allow natural row wrapping with accessible navigation height; do not hide overflow or the demo label. | Dedicated 320/390px fallback-font browser test failed before repair, alongside the unchanged original overflow assertions. |
+| D13 | A correction notice open in an old tab acknowledged a newly reset replay at the same sequence; dedicated browser test failed. | Correction-notice acknowledgement omitted the environment precondition used by other acknowledgement controls. Pass the observed scenario/generation through the same server transaction guard. | Stale-correction browser test verifies rejection and preservation of the new replay’s unacknowledged TCS update. |
 
 ## Additional hardening (not counted as baseline defects)
 
@@ -51,5 +53,7 @@ The local embedded Prisma PostgreSQL backend must not be driven by separate test
 The parallel Mark All/Mark Seen test sends its stale sequence only after the two newer commands finish; this establishes the stated stale-request precondition on multi-connection PostgreSQL, rather than depending on local FIFO scheduling.
 
 The eleven original browser flows now use `page.request` rather than a separate API cookie jar, because identity is no longer globally shared. Their expected outcomes remain unchanged. Accessibility also required disambiguating the application's error alert from Next's route-announcer alert, without weakening the error assertion.
+
+Remote CI uncovered D12 after all local browser checks had passed. GitHub reporter annotations were enabled to expose exact failures without requiring authenticated log downloads. The two final repairs preserve policy/scenario hashes and all original assertions.
 
 See [BUILD5.md](BUILD5.md) for final validation and limitations.

@@ -1,5 +1,16 @@
 import {expect,test} from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+test("mobile navigation remains visible with wider fallback fonts", async ({ page }) => {
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto("/");
+    await expect(page.getByTestId("caught-up-state")).toBeVisible();
+    await page.addStyleTag({ content: "body { font-family: Verdana, sans-serif; }" });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await expect(page.getByRole("navigation").getByRole("link", { name: "Watchlist" })).toBeVisible();
+    await expect(page.locator(".header-inner > .demo-badge")).toBeVisible();
+  }
+});
 test("core screens and driver dialog support accessible responsive navigation",async({page},testInfo)=>{
   test.setTimeout(120000);
   for(const width of [390,768,1440]) {
