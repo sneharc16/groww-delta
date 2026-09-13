@@ -35,4 +35,4 @@ jobs:
       - run: pnpm verify
       - run: pnpm research:export
       - run: pnpm exec playwright install --with-deps chromium
-      - run: PLAYWRIGHT_USE_BUILD=true pnpm test:e2e
+      - run: PLAYWRIGHT_USE_BUILD=true pnpm test:e2e --reporter=github,list
