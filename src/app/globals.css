@@ -5,14 +5,14 @@
   --surface: #ffffff;
   --surface-soft: #f1f5f4;
   --text: #14201d;
-  --muted: #63716d;
+  --muted: #596863;
   --border: #dfe7e4;
-  --accent: #0b8f75;
+  --accent: #087c65;
   --accent-dark: #08715e;
   --accent-soft: #e7f7f2;
   --intent: #4f5fb7;
   --intent-soft: #eef0ff;
-  --amber: #a56312;
+  --amber: #94580d;
   --amber-soft: #fff5df;
   --danger: #bd3f3f;
   --danger-soft: #fff0f0;
@@ -352,3 +352,9 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .data-status { margin: 12px 0; }
 .form-field select { display: block; width: 100%; margin: 8px 0 16px; padding: 10px; border: 1px solid #dce1e8; border-radius: 8px; background: white; }
 .trust-notice .action-row { flex-wrap: wrap; margin-top: 12px; }
+
+.skip-link { position: fixed; top: 8px; left: 8px; z-index: 100; padding: 10px; background: white; color: var(--text); transform: translateY(-160%); }
+.skip-link:focus { transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

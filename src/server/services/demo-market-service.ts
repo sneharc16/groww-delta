@@ -11,6 +11,7 @@ export class DemoMarketService {
 
   private toDto(state: DemoMarketState): DemoStateDto {
     return {
+      generation: state.position.generation ?? 0,
       scenario: state.scenario,
       currentStep: state.position.currentStep,
       currentSequence: state.position.currentSequence,

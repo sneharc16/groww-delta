@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-test("contextual graph relevance explains the Step 4 Crude-to-IndiGo path", async ({ page, request }) => {
+test("contextual graph relevance explains the Step 4 Crude-to-IndiGo path", async ({ page }) => {
+  const request = page.request;
   expect((await request.post("/api/demo/reset")).ok()).toBeTruthy();
   expect((await request.patch("/api/watch-intents/intent%3Aindigo%3Adriver/graph", { data: { templateKey: "AIRLINE_FUEL_COST", selectedNodeKeys: ["FUEL_COST", "CRUDE"] } })).ok()).toBeTruthy();
   expect((await request.post("/api/demo/advance")).ok()).toBeTruthy();
@@ -22,7 +23,8 @@ test("contextual graph relevance explains the Step 4 Crude-to-IndiGo path", asyn
   await expect(page.getByTestId("related-drivers-section")).toContainText("Crude");
 });
 
-test("removing Crude creates graph history and suppresses future Crude relevance", async ({ page, request }) => {
+test("removing Crude creates graph history and suppresses future Crude relevance", async ({ page }) => {
+  const request = page.request;
   expect((await request.post("/api/demo/reset")).ok()).toBeTruthy();
   await page.goto("/stock/INDIGO");
   const related = page.getByTestId("related-drivers-section");
@@ -50,7 +52,8 @@ test("removing Crude creates graph history and suppresses future Crude relevance
   await expect(page.getByTestId("related-drivers-section")).toContainText("Crude");
 });
 
-test("acknowledged results can resolve and renew without removing TCS", async ({ page, request }) => {
+test("acknowledged results can resolve and renew without removing TCS", async ({ page }) => {
+  const request = page.request;
   expect((await request.post("/api/demo/reset")).ok()).toBeTruthy();
   expect((await request.patch("/api/watch-intents/intent%3Atcs%3Aearnings", {
     data: {

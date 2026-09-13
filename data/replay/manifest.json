@@ -1,0 +1,18 @@
+{
+  "groww-delta-default": {
+    "version": "1.0.0",
+    "hash": "c21ea7f2c683dec5fbf8e837c6c93c7ce27d1f1f3cb02d7d3e34c2f8ac3b88f8"
+  },
+  "data-quality": {
+    "version": "1.0.0",
+    "hash": "c390dc712a8b4f92b091715ec7764ec27227eed4225cb53cbe48a071a1aaa9cb"
+  },
+  "market-shock": {
+    "version": "1.0.0",
+    "hash": "d3e1d489d4107081939396ff9ede9717c5241158c2ae2013cb04da29a0fb6699"
+  },
+  "corporate-action": {
+    "version": "1.0.0",
+    "hash": "c75308644383d30d922c34ffee13c296a51bfb40e5e0c21fe3c0ab7ac92c0884"
+  }
+}

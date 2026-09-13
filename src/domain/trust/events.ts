@@ -1,3 +1,4 @@
+import { MARKET_EVENT_TYPES } from "@/domain/market/types";
 import type { MarketEventRecord } from "@/domain/market/types";
 import { AppError } from "@/lib/errors/app-error";
 
@@ -10,6 +11,7 @@ function canonical(value: unknown): string {
 export function normalizeEvents(events: MarketEventRecord[]): MarketEventRecord[] {
   const byId = new Map<string, MarketEventRecord>();
   for (const event of events) {
+    if (!MARKET_EVENT_TYPES.includes(event.type) || !Number.isSafeInteger(event.sequence) || event.sequence < 0 || !event.id || !(event.eventTime instanceof Date) || !Number.isFinite(event.eventTime.getTime())) throw new AppError("INVALID_MARKET_EVENT", "Unsupported or malformed market event.", 409);
     const previous = byId.get(event.id);
     if (previous && canonical(previous) !== canonical(event)) throw new AppError("EVENT_INTEGRITY_CONFLICT", "Conflicting content was received for the same immutable market event.", 409);
     byId.set(event.id, event);

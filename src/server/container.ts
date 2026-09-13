@@ -1,3 +1,6 @@
+import { sessionPreferences } from "@/server/repositories/session-preferences";
+import { DEFAULT_DEMO_SESSION_ID } from "@/lib/constants";
+import { database, type Database } from "@/server/repositories/database";
 import {
   PrismaDemoSessionRepository,
   PrismaInstrumentRepository,
@@ -21,26 +24,32 @@ import { PrismaCorporateActionReviewRepository } from "@/server/repositories/cor
 import { CorporateActionService } from "@/server/services/corporate-action-service";
 import { IntentLifecycleService } from "@/server/services/intent-lifecycle-service";
 
-const instruments = new PrismaInstrumentRepository();
-const watchlists = new PrismaWatchlistRepository();
-const intents = new PrismaWatchIntentRepository();
-const sessions = new PrismaDemoSessionRepository();
-const snapshots = new PrismaMarketSnapshotRepository();
-const events = new PrismaMarketEventRepository();
-const cursors = new PrismaKnowledgeCursorRepository();
-const acknowledgements = new PrismaKnowledgeAcknowledgementRepository();
-const graphs = new PrismaWatchGraphRepository();
-const corporateReviews = new PrismaCorporateActionReviewRepository();
-const market = new ReplayMarketProvider(sessions, snapshots, events);
+export function createServices(db: Database = database, demoSessionId = DEFAULT_DEMO_SESSION_ID) {
+const instruments = new PrismaInstrumentRepository(db);
+const watchlists = new PrismaWatchlistRepository(db);
+const intents = new PrismaWatchIntentRepository(db);
+const sessions = new PrismaDemoSessionRepository(db);
+const snapshots = new PrismaMarketSnapshotRepository(db);
+const events = new PrismaMarketEventRepository(db);
+const cursors = new PrismaKnowledgeCursorRepository(db, demoSessionId);
+const acknowledgements = new PrismaKnowledgeAcknowledgementRepository(db);
+const graphs = new PrismaWatchGraphRepository(db);
+const corporateReviews = new PrismaCorporateActionReviewRepository(db);
+const market = new ReplayMarketProvider(sessions, snapshots, events, demoSessionId);
 
-export const services = {
+return {
+  preferences: sessionPreferences(db),
   corporateActions: new CorporateActionService(corporateReviews, intents, market),
   instruments: new InstrumentService(instruments),
   watchlist: new WatchlistService(watchlists, instruments, intents, market, cursors),
   watchIntents: new WatchIntentService(intents, instruments, market),
   demo: new DemoMarketService(market, market),
   market: new MarketQueryService(market, watchlists),
-  catchUp: new CatchUpService(watchlists, cursors, intents, sessions, market, graphs, corporateReviews),
+  catchUp: new CatchUpService(watchlists, cursors, intents, sessions, market, graphs, corporateReviews, demoSessionId),
   watchGraphs: new WatchGraphService(graphs, intents, market),
-  intentLifecycle: new IntentLifecycleService(intents, graphs, cursors, acknowledgements, sessions, market),
+  intentLifecycle: new IntentLifecycleService(intents, graphs, cursors, acknowledgements, sessions, market, demoSessionId),
 };
+
+}
+/** Explicit offline legacy demo container; never imported by HTTP routes. */
+export const services = createServices();

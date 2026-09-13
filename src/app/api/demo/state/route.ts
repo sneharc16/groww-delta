@@ -1,13 +1,10 @@
 import { NextResponse } from "next/server";
-import { apiError } from "@/lib/validation/api";
-import { services } from "@/server/container";
+import { withSession } from "@/server/session/request";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  try {
+export async function GET(request: Request) {
+  return withSession(request, async ({ services }) => {
     return NextResponse.json(await services.demo.getState());
-  } catch (error: unknown) {
-    return apiError(error);
-  }
+  });
 }

@@ -45,6 +45,7 @@ export interface AttentionDisplay {
 }
 
 export interface AttentionItem {
+  decisionTrace: import("./trace").AttentionDecisionTrace;
   conditionAssessments: import("@/domain/trust/price-conditions").PriceConditionAssessment[];
   lastConfirmedSnapshot: MarketSnapshotRecord | null;
   trust: import("@/domain/trust/types").DataTrust;
@@ -84,6 +85,8 @@ export interface AttentionItem {
 }
 
 export interface AttentionAnalysisInput {
+  traceContext?: { scenarioId: string; scenarioVersion: string; scenarioContentHash: string; researchSessionId?: string };
+  metrics?: { graphNodesVisited: number };
   demoTimeTravel?: boolean;
   providerHealth?: import("@/domain/trust/types").MarketProviderHealth;
   marketContext?: import("@/domain/market/context").MarketContext | null;

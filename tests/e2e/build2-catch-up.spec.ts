@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-test("meaningful Catch Up separates intent matches from objective significance", async ({ page, request }) => {
+test("meaningful Catch Up separates intent matches from objective significance", async ({ page }) => {
+  const request = page.request;
   const reset = await request.post("/api/demo/reset");
   expect(reset.ok()).toBeTruthy();
 
@@ -21,7 +22,8 @@ test("meaningful Catch Up separates intent matches from objective significance",
   await expect(page.getByTestId("attention-RELIANCE")).toContainText("unusually large move");
 });
 
-test("acknowledgement persists and Step 2 information does not return at Step 3", async ({ page, request }) => {
+test("acknowledgement persists and Step 2 information does not return at Step 3", async ({ page }) => {
+  const request = page.request;
   expect((await request.post("/api/demo/reset")).ok()).toBeTruthy();
   expect((await request.post("/api/demo/advance")).ok()).toBeTruthy();
   expect((await request.post("/api/demo/advance")).ok()).toBeTruthy();

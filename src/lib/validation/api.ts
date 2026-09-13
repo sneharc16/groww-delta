@@ -25,6 +25,6 @@ export function apiError(error: unknown): NextResponse {
       },
     }, { status: 400 });
   }
-  console.error(error);
+  // The request boundary logs only an allowlisted error class, never raw errors.
   return NextResponse.json({ error: { code: "INTERNAL_ERROR", message: "Something went wrong." } }, { status: 500 });
 }
