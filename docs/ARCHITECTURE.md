@@ -97,3 +97,27 @@ Trust logic is under `src/domain/trust`; benchmark policy is under `src/domain/m
 Cursor advancement and per-instrument acknowledgement history share one transaction, with deterministic row locks and conditional increments. The acknowledgement command also guards against a replay reset occurring during the command. Scenario reset is a transactional session/cursor update. Scenario/generation namespaces keep replay history separate without weakening the production matcher.
 
 The registry is fixture input behind ReplayMarketProvider. Services request provider data, not scenario-specific attention outcomes. PostgreSQL is still the only source of product state; no cache or extra service was added. See [Build 4](BUILD4.md) for the documentation-only production ingestion evolution.
+
+## Build 5 request and research boundaries
+
+```mermaid
+flowchart TD
+  Browser[Presentation: anonymous cookie] --> Boundary[Session / input / origin boundary]
+  Boundary --> Tx[Per-session command lock or repeatable-read evaluation]
+  Tx --> Services[Application services]
+  Services --> Analyzer[Attention + Knowledge + Graph + Trust]
+  Policy[Frozen reference policy] --> Analyzer
+  Repos[Repository interfaces / Prisma] --> PG[(PostgreSQL)]
+  Services --> Repos
+  Replay[Version-pinned ReplayMarketProvider] --> Services
+  Analyzer --> Trace[Decision trace from actual computation]
+  Trace --> UI[DTOs / consumer explanations]
+  Offline[Offline configurations + bounded datasets] --> Analyzer
+  Trace --> Export[JSONL / CSV + run manifest]
+```
+
+AnonymousSession owns a unique User and DemoSession; mutable records use that user or session ID. Shared market observations are immutable and scenario-version scoped. Routes no longer use demo-user. The legacy container is retained only for offline development scripts.
+
+All request mutations take the session row lock and execute services/repositories in one transaction. Idempotency receipts commit with the mutation. Intent/graph edits accept If-Match and replay advances accept the displayed position token. Read evaluations use RepeatableRead and never acknowledge knowledge. Provisioning a new anonymous identity creates its initial baseline, but existing-session GETs are read-only.
+
+Query-event metrics and allowlisted logs never include SQL, parameters, connection strings or cookies. Decision logs correlate with the request ID and pseudonymous trace session ID. The research CLI has no UI dependency and production has no research-configuration dependency.

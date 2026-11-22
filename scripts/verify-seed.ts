@@ -12,6 +12,7 @@ async function counts() {
     events: await prisma.marketEvent.count(), snapshots: await prisma.marketSnapshot.count(),
     cursors: await prisma.knowledgeCursor.count(), acknowledgements: await prisma.knowledgeAcknowledgement.count(),
     reviews: await prisma.corporateActionReview.count(),
+    sessions: await prisma.anonymousSession.count(), receipts: await prisma.mutationReceipt.count(), datasets: await prisma.replayDataset.count(),
   };
 }
 try {

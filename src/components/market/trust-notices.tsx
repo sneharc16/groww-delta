@@ -5,14 +5,14 @@ import { apiFetch } from "@/lib/api/client";
 import { formatINRLevelFromPaise, formatISTTime } from "@/lib/format/market";
 import { Button } from "@/components/ui/button";
 
-export function TrustNotices({ notices, throughSequence, onChanged }: { notices: TrustNotice[]; throughSequence: number; onChanged: () => Promise<void> }) {
+export function TrustNotices({ notices, throughSequence, environment, onChanged }: { notices: TrustNotice[]; throughSequence: number; environment?: string; onChanged: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function decide(notice: TrustNotice, decision: "ADJUST" | "KEEP" | "LATER") {
     if (!notice.action) return;
     setBusy(true); setError(null);
     try {
-      await apiFetch(`/api/watch-intents/${encodeURIComponent(notice.action.logicalIntentId)}/corporate-action`, { method: "POST", body: JSON.stringify({ eventId: notice.action.eventId, decision }) });
+      await apiFetch(`/api/watch-intents/${encodeURIComponent(notice.action.logicalIntentId)}/corporate-action`, { method: "POST", headers: environment ? { "X-Delta-Environment": environment } : {}, body: JSON.stringify({ eventId: notice.action.eventId, decision }) });
       await onChanged();
     } catch (caught: unknown) { setError(caught instanceof Error ? caught.message : "Could not save this decision."); }
     finally { setBusy(false); }
@@ -21,7 +21,7 @@ export function TrustNotices({ notices, throughSequence, onChanged }: { notices:
     if (!notice.instrumentId) return;
     setBusy(true);
     try {
-      await apiFetch("/api/catch-up/acknowledge", { method: "POST", body: JSON.stringify({ instrumentIds: [notice.instrumentId], throughSequence }) });
+      await apiFetch("/api/catch-up/acknowledge", { method: "POST", headers: environment ? { "X-Delta-Environment": environment } : {}, body: JSON.stringify({ instrumentIds: [notice.instrumentId], throughSequence }) });
       await onChanged();
     } catch (caught: unknown) { setError(caught instanceof Error ? caught.message : "Could not acknowledge this update."); }
     finally { setBusy(false); }

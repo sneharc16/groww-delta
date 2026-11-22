@@ -1,5 +1,5 @@
 import { Prisma } from "@/generated/prisma/client";
-import { prisma } from "@/lib/db/client";
+import { database, type Database } from "./database";
 import { AppError } from "@/lib/errors/app-error";
 import type {
   CreateIntentRecordInput,
@@ -29,18 +29,20 @@ const instrumentSelect = {
 const graphInclude = { nodes: { orderBy: { nodeKey: "asc" as const } }, edges: { orderBy: { id: "asc" as const } } } as const;
 
 export class PrismaInstrumentRepository implements InstrumentRepository {
+  constructor(private readonly db: Database = database) {}
   listActive() {
-    return prisma.instrument.findMany({ where: { isActive: true }, select: instrumentSelect, orderBy: { symbol: "asc" } });
+    return this.db.instrument.findMany({ where: { isActive: true }, select: instrumentSelect, orderBy: { symbol: "asc" } });
   }
 
   findById(id: string) {
-    return prisma.instrument.findUnique({ where: { id }, select: instrumentSelect });
+    return this.db.instrument.findUnique({ where: { id }, select: instrumentSelect });
   }
 }
 
 export class PrismaWatchlistRepository implements WatchlistRepository {
+  constructor(private readonly db: Database = database) {}
   getDefaultForUser(userId: string) {
-    return prisma.watchlist.findFirst({
+    return this.db.watchlist.findFirst({
       where: { userId },
       orderBy: { createdAt: "asc" },
       include: {
@@ -54,21 +56,21 @@ export class PrismaWatchlistRepository implements WatchlistRepository {
   }
 
   findActiveItem(watchlistId: string, instrumentId: string) {
-    return prisma.watchlistItem.findFirst({
+    return this.db.watchlistItem.findFirst({
       where: { watchlistId, instrumentId, archivedAt: null },
       include: { instrument: { select: instrumentSelect } },
     });
   }
 
   addItem(watchlistId: string, instrumentId: string) {
-    return prisma.watchlistItem.create({
+    return this.db.watchlistItem.create({
       data: { watchlistId, instrumentId, provenanceSource: "MANUAL" },
       include: { instrument: { select: instrumentSelect } },
     });
   }
 
   async archiveItem(itemId: string, watchlistId: string, archivedAt: Date) {
-    const result = await prisma.watchlistItem.updateMany({
+    const result = await this.db.watchlistItem.updateMany({
       where: { id: itemId, watchlistId, archivedAt: null },
       data: { archivedAt },
     });
@@ -84,37 +86,38 @@ function intentData(input: CreateIntentRecordInput) {
 }
 
 export class PrismaWatchIntentRepository implements WatchIntentRepository {
+  constructor(private readonly db: Database = database) {}
   listForInstrument(userId: string, instrumentId: string) {
-    return prisma.watchIntent.findMany({
+    return this.db.watchIntent.findMany({
       where: { userId, instrumentId },
       orderBy: [{ logicalIntentId: "asc" }, { version: "desc" }],
     });
   }
 
   listActiveForInstruments(userId: string, instrumentIds: string[]) {
-    return prisma.watchIntent.findMany({
+    return this.db.watchIntent.findMany({
       where: { userId, instrumentId: { in: instrumentIds }, status: "ACTIVE" },
       orderBy: [{ instrumentId: "asc" }, { logicalIntentId: "asc" }],
     });
   }
 
   findCurrent(userId: string, logicalIntentId: string) {
-    return prisma.watchIntent.findFirst({
+    return this.db.watchIntent.findFirst({
       where: { userId, logicalIntentId, status: "ACTIVE" },
       orderBy: { version: "desc" },
     });
   }
 
   findLatest(userId: string, logicalIntentId: string) {
-    return prisma.watchIntent.findFirst({ where: { userId, logicalIntentId }, orderBy: { version: "desc" } });
+    return this.db.watchIntent.findFirst({ where: { userId, logicalIntentId }, orderBy: { version: "desc" } });
   }
 
   create(input: CreateIntentRecordInput) {
-    return prisma.watchIntent.create({ data: intentData(input) });
+    return this.db.watchIntent.create({ data: intentData(input) });
   }
 
   async supersedeAndCreate(previousId: string, input: CreateIntentRecordInput) {
-    return prisma.$transaction(async (transaction) => {
+    return this.db.$transaction(async (transaction) => {
       const updated = await transaction.watchIntent.updateMany({
         where: { id: previousId, status: "ACTIVE" },
         data: { status: "SUPERSEDED" },
@@ -125,12 +128,12 @@ export class PrismaWatchIntentRepository implements WatchIntentRepository {
   }
 
   archiveCurrent(id: string) {
-    return prisma.watchIntent.update({ where: { id }, data: { status: "ARCHIVED" } });
+    return this.db.watchIntent.update({ where: { id }, data: { status: "ARCHIVED" } });
   }
 
 
   resolveCurrent(id: string, resolvedAt: Date, resolvedAtSequence: number) {
-    return prisma.$transaction(async (transaction) => {
+    return this.db.$transaction(async (transaction) => {
       const current = await transaction.watchIntent.findUniqueOrThrow({ where: { id } });
       const changed = await transaction.watchIntent.updateMany({ where: { id, status: "ACTIVE" }, data: { status: "RESOLVED", resolvedAt, resolvedAtSequence } });
       if (changed.count !== 1) throw new AppError("INTENT_VERSION_CONFLICT", "This watch reason changed. Refresh and try again.", 409);
@@ -140,27 +143,28 @@ export class PrismaWatchIntentRepository implements WatchIntentRepository {
   }
 
   keepWatching(id: string, throughSequence: number) {
-    return prisma.watchIntent.update({ where: { id }, data: { lifecycleReviewedThroughSequence: throughSequence } });
+    return this.db.watchIntent.update({ where: { id }, data: { lifecycleReviewedThroughSequence: throughSequence } });
   }
 
   renew(previousId: string, input: CreateIntentRecordInput) {
-    return prisma.watchIntent.create({ data: intentData({ ...input, supersedesId: previousId }) });
+    return this.db.watchIntent.create({ data: intentData({ ...input, supersedesId: previousId }) });
   }
 }
 
 export class PrismaDemoSessionRepository implements DemoSessionRepository {
+  constructor(private readonly db: Database = database) {}
   getById(id: string) {
-    return prisma.demoSession.findUnique({ where: { id } });
+    return this.db.demoSession.findUnique({ where: { id } });
   }
 
   async setPosition(id: string, currentStep: number, currentSequence: number, currentTime: Date) {
-    const state = await prisma.demoSession.findUniqueOrThrow({ where: { id } });
-    return prisma.demoSession.update({ where: { id }, data: { currentStep, currentSequence, currentTime, ...(state.providerStatus === "UNAVAILABLE" ? {} : { lastHealthySequence: currentSequence }) } });
+    const state = await this.db.demoSession.findUniqueOrThrow({ where: { id } });
+    return this.db.demoSession.update({ where: { id }, data: { currentStep, currentSequence, currentTime, ...(state.providerStatus === "UNAVAILABLE" ? {} : { lastHealthySequence: currentSequence }) } });
   }
 
-  resetScenario(id: string, scenarioId: string, time: Date, userId: string, baselines: Parameters<DemoSessionRepository["resetScenario"]>[4]) {
-    return prisma.$transaction(async (transaction) => {
-      const state = await transaction.demoSession.update({ where: { id }, data: { scenarioId, currentStep: 0, currentSequence: 0, currentTime: time, providerStatus: "HEALTHY", lastHealthySequence: 0, generation: { increment: 1 } } });
+  resetScenario(id: string, scenarioId: string, time: Date, userId: string, baselines: Parameters<DemoSessionRepository["resetScenario"]>[4], scenarioVersion = "1.0.0") {
+    return this.db.$transaction(async (transaction) => {
+      const state = await transaction.demoSession.update({ where: { id }, data: { scenarioId, scenarioVersion, currentStep: 0, currentSequence: 0, currentTime: time, providerStatus: "HEALTHY", lastHealthySequence: 0, generation: { increment: 1 } } });
       const active = await transaction.watchlistItem.findMany({ where: { archivedAt: null, watchlist: { userId } } });
       for (const item of active) {
         const baseline = baselines.find((row) => row.instrumentId === item.instrumentId);
@@ -174,20 +178,21 @@ export class PrismaDemoSessionRepository implements DemoSessionRepository {
   }
 
   async setProviderStatus(id: string, status: "HEALTHY" | "DEGRADED" | "UNAVAILABLE") {
-    const state = await prisma.demoSession.findUniqueOrThrow({ where: { id } });
-    return prisma.demoSession.update({ where: { id }, data: { providerStatus: status, ...(status === "UNAVAILABLE" ? {} : { lastHealthySequence: state.currentSequence }) } });
+    const state = await this.db.demoSession.findUniqueOrThrow({ where: { id } });
+    return this.db.demoSession.update({ where: { id }, data: { providerStatus: status, ...(status === "UNAVAILABLE" ? {} : { lastHealthySequence: state.currentSequence }) } });
   }
 }
 
 export class PrismaMarketSnapshotRepository implements MarketSnapshotRepository {
-  findCurrent(instrumentId: string, currentSequence: number, scenarioId = "groww-delta-default") {
-    return prisma.marketSnapshot.findFirst({ where: { scenarioId, instrumentId, sequence: { lte: currentSequence } }, orderBy: { sequence: "desc" } });
+  constructor(private readonly db: Database = database) {}
+  findCurrent(instrumentId: string, currentSequence: number, scenarioId = "groww-delta-default", scenarioVersion = "1.0.0") {
+    return this.db.marketSnapshot.findFirst({ where: { scenarioId, scenarioVersion, instrumentId, sequence: { lte: currentSequence } }, orderBy: { sequence: "desc" } });
   }
 
-  async findCurrentMany(instrumentIds: string[], currentSequence: number, scenarioId = "groww-delta-default") {
+  async findCurrentMany(instrumentIds: string[], currentSequence: number, scenarioId = "groww-delta-default", scenarioVersion = "1.0.0") {
     if (instrumentIds.length === 0) return [];
-    const rows = await prisma.marketSnapshot.findMany({
-      where: { scenarioId, instrumentId: { in: instrumentIds }, sequence: { lte: currentSequence } },
+    const rows = await this.db.marketSnapshot.findMany({
+      where: { scenarioId, scenarioVersion, instrumentId: { in: instrumentIds }, sequence: { lte: currentSequence } },
       orderBy: [{ instrumentId: "asc" }, { sequence: "desc" }],
     });
     const found = new Map<string, (typeof rows)[number]>();
@@ -195,33 +200,35 @@ export class PrismaMarketSnapshotRepository implements MarketSnapshotRepository 
     return [...found.values()];
   }
 
-  listThroughSequence(instrumentId: string, currentSequence: number, scenarioId = "groww-delta-default") {
-    return prisma.marketSnapshot.findMany({ where: { scenarioId, instrumentId, sequence: { lte: currentSequence } }, orderBy: { sequence: "asc" } });
+  listThroughSequence(instrumentId: string, currentSequence: number, scenarioId = "groww-delta-default", scenarioVersion = "1.0.0") {
+    return this.db.marketSnapshot.findMany({ where: { scenarioId, scenarioVersion, instrumentId, sequence: { lte: currentSequence } }, orderBy: { sequence: "asc" } });
   }
 
-  listForInstrumentsThrough(instrumentIds: string[], currentSequence: number, scenarioId = "groww-delta-default") {
+  listForInstrumentsThrough(instrumentIds: string[], currentSequence: number, scenarioId = "groww-delta-default", scenarioVersion = "1.0.0") {
     if (instrumentIds.length === 0) return Promise.resolve([]);
-    return prisma.marketSnapshot.findMany({
-      where: { scenarioId, instrumentId: { in: instrumentIds }, sequence: { lte: currentSequence } },
+    return this.db.marketSnapshot.findMany({
+      where: { scenarioId, scenarioVersion, instrumentId: { in: instrumentIds }, sequence: { lte: currentSequence } },
       orderBy: [{ instrumentId: "asc" }, { sequence: "asc" }],
     });
   }
 }
 
 export class PrismaMarketEventRepository implements MarketEventRepository {
-  listBetweenSequences(exclusiveStart: number, inclusiveEnd: number, scenarioId = "groww-delta-default") {
-    return prisma.marketEvent.findMany({
-      where: { scenarioId, sequence: { gt: exclusiveStart, lte: inclusiveEnd } },
+  constructor(private readonly db: Database = database) {}
+  listBetweenSequences(exclusiveStart: number, inclusiveEnd: number, scenarioId = "groww-delta-default", scenarioVersion = "1.0.0") {
+    return this.db.marketEvent.findMany({
+      where: { scenarioId, scenarioVersion, sequence: { gt: exclusiveStart, lte: inclusiveEnd } },
       orderBy: [{ sequence: "asc" }, { eventTime: "asc" }, { id: "asc" }],
     });
   }
 }
 
 export class PrismaKnowledgeCursorRepository implements KnowledgeCursorRepository {
+  constructor(private readonly db: Database = database, private readonly demoSessionId = "default-demo-session") {}
   acknowledgeMany(userId: string, inputs: Parameters<KnowledgeCursorRepository["acknowledgeMany"]>[1], scope: "INSTRUMENT" | "WATCHLIST") {
-    return prisma.$transaction(async (transaction) => {
-      await transaction.$queryRaw`SELECT "id" FROM "DemoSession" WHERE "id" = 'default-demo-session' FOR SHARE`;
-      const state = await transaction.demoSession.findUnique({ where: { id: "default-demo-session" } });
+    return this.db.$transaction(async (transaction) => {
+      await transaction.$queryRaw`SELECT "id" FROM "DemoSession" WHERE "id" = ${this.demoSessionId} FOR SHARE`;
+      const state = await transaction.demoSession.findUnique({ where: { id: this.demoSessionId } });
       const result = [];
       for (const input of [...inputs].sort((a, b) => a.instrumentId.localeCompare(b.instrumentId))) {
         if (input.expectedScenarioId !== undefined && (input.expectedScenarioId !== state?.scenarioId || input.expectedGeneration !== state.generation)) throw new AppError("INVALID_ACK_SEQUENCE", "The replay was reset. Refresh before marking information seen.", 409);
@@ -247,14 +254,14 @@ export class PrismaKnowledgeCursorRepository implements KnowledgeCursorRepositor
   }
   listForInstruments(userId: string, instrumentIds: string[]) {
     if (instrumentIds.length === 0) return Promise.resolve([]);
-    return prisma.knowledgeCursor.findMany({
+    return this.db.knowledgeCursor.findMany({
       where: { userId, instrumentId: { in: instrumentIds } },
       orderBy: { instrumentId: "asc" },
     });
   }
 
   setBaseline(userId: string, input: Parameters<KnowledgeCursorRepository["setBaseline"]>[1]) {
-    return prisma.knowledgeCursor.upsert({
+    return this.db.knowledgeCursor.upsert({
       where: { userId_instrumentId: { userId, instrumentId: input.instrumentId } },
       update: {
         lastSeenSequence: input.sequence,
@@ -274,7 +281,7 @@ export class PrismaKnowledgeCursorRepository implements KnowledgeCursorRepositor
   }
 
   async advanceMonotonic(userId: string, input: Parameters<KnowledgeCursorRepository["advanceMonotonic"]>[1]) {
-    await prisma.knowledgeCursor.updateMany({
+    await this.db.knowledgeCursor.updateMany({
       where: { userId, instrumentId: input.instrumentId, lastSeenSequence: { lt: input.sequence } },
       data: {
         lastSeenSequence: input.sequence,
@@ -283,11 +290,11 @@ export class PrismaKnowledgeCursorRepository implements KnowledgeCursorRepositor
         cursorVersion: { increment: 1 },
       },
     });
-    return prisma.knowledgeCursor.findUnique({ where: { userId_instrumentId: { userId, instrumentId: input.instrumentId } } });
+    return this.db.knowledgeCursor.findUnique({ where: { userId_instrumentId: { userId, instrumentId: input.instrumentId } } });
   }
 
   resetMany(userId: string, inputs: Parameters<KnowledgeCursorRepository["resetMany"]>[1]) {
-    return prisma.$transaction(inputs.map((input) => prisma.knowledgeCursor.upsert({
+    return this.db.$transaction(async (tx) => Promise.all(inputs.map((input) => tx.knowledgeCursor.upsert({
       where: { userId_instrumentId: { userId, instrumentId: input.instrumentId } },
       update: {
         lastSeenSequence: input.sequence,
@@ -303,17 +310,18 @@ export class PrismaKnowledgeCursorRepository implements KnowledgeCursorRepositor
         lastObservedSnapshotId: input.snapshotId,
         cursorVersion: 1,
       },
-    })));
+    }))));
   }
 }
 
 export class PrismaKnowledgeAcknowledgementRepository implements KnowledgeAcknowledgementRepository {
+  constructor(private readonly db: Database = database) {}
   create(input: Parameters<KnowledgeAcknowledgementRepository["create"]>[0]) {
-    return prisma.knowledgeAcknowledgement.create({ data: input });
+    return this.db.knowledgeAcknowledgement.create({ data: input });
   }
 
   listForInstrument(userId: string, instrumentId: string) {
-    return prisma.knowledgeAcknowledgement.findMany({
+    return this.db.knowledgeAcknowledgement.findMany({
       where: { userId, instrumentId },
       orderBy: [{ throughSequence: "asc" }, { acknowledgedAt: "asc" }],
     });
@@ -321,9 +329,14 @@ export class PrismaKnowledgeAcknowledgementRepository implements KnowledgeAcknow
 }
 
 export class PrismaWatchGraphRepository implements WatchGraphRepository {
+  listHistoryForIntentLogicalIds(userId: string, logicalIntentIds: string[]) {
+    if (!logicalIntentIds.length) return Promise.resolve([]);
+    return this.db.watchGraph.findMany({ where: { userId, watchIntentLogicalId: { in: logicalIntentIds } }, include: graphInclude, orderBy: [{ watchIntentLogicalId: "asc" }, { version: "desc" }] });
+  }
+  constructor(private readonly db: Database = database) {}
   listActiveForIntentLogicalIds(userId: string, logicalIntentIds: string[]) {
     if (logicalIntentIds.length === 0) return Promise.resolve([]);
-    return prisma.watchGraph.findMany({
+    return this.db.watchGraph.findMany({
       where: { userId, watchIntentLogicalId: { in: logicalIntentIds }, status: "ACTIVE" },
       include: graphInclude,
       orderBy: [{ watchIntentLogicalId: "asc" }, { version: "desc" }],
@@ -331,7 +344,7 @@ export class PrismaWatchGraphRepository implements WatchGraphRepository {
   }
 
   listForIntent(userId: string, logicalIntentId: string) {
-    return prisma.watchGraph.findMany({
+    return this.db.watchGraph.findMany({
       where: { userId, watchIntentLogicalId: logicalIntentId },
       include: graphInclude,
       orderBy: { version: "desc" },
@@ -339,7 +352,7 @@ export class PrismaWatchGraphRepository implements WatchGraphRepository {
   }
 
   findActive(userId: string, logicalIntentId: string) {
-    return prisma.watchGraph.findFirst({
+    return this.db.watchGraph.findFirst({
       where: { userId, watchIntentLogicalId: logicalIntentId, status: "ACTIVE" },
       include: graphInclude,
       orderBy: { version: "desc" },
@@ -347,7 +360,7 @@ export class PrismaWatchGraphRepository implements WatchGraphRepository {
   }
 
   createVersion(previousId: string | null, input: Parameters<WatchGraphRepository["createVersion"]>[1]) {
-    return prisma.$transaction(async (transaction) => {
+    return this.db.$transaction(async (transaction) => {
       if (previousId) {
         await transaction.watchGraph.updateMany({ where: { id: previousId, status: "ACTIVE" }, data: { status: "SUPERSEDED" } });
       }
@@ -378,7 +391,7 @@ export class PrismaWatchGraphRepository implements WatchGraphRepository {
   }
 
   async archiveActiveForIntent(userId: string, logicalIntentId: string) {
-    const result = await prisma.watchGraph.updateMany({ where: { userId, watchIntentLogicalId: logicalIntentId, status: "ACTIVE" }, data: { status: "ARCHIVED" } });
+    const result = await this.db.watchGraph.updateMany({ where: { userId, watchIntentLogicalId: logicalIntentId, status: "ACTIVE" }, data: { status: "ARCHIVED" } });
     return result.count;
   }
 }

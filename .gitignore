@@ -9,3 +9,6 @@ src/generated/prisma/
 *.log
 *.tsbuildinfo
 .DS_Store
+
+research/exports/*
+research/benchmarks/results/*

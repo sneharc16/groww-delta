@@ -5,7 +5,8 @@ async function ensureWatched(request: APIRequestContext, instrumentId: string) {
   expect([201, 409]).toContain(response.status());
 }
 
-test("watch reason versioning and deterministic replay smoke flow", async ({ page, request }) => {
+test("watch reason versioning and deterministic replay smoke flow", async ({ page }) => {
+  const request = page.request;
   await page.request.post("/api/demo/reset");
   await ensureWatched(request, "NSE:TCS");
   await page.goto("/");
@@ -33,7 +34,8 @@ test("watch reason versioning and deterministic replay smoke flow", async ({ pag
   await expect(page.getByTestId("demo-price-TCS")).toContainText("3,206.00");
 });
 
-test("duplicate rejection and watchlist archive/re-add survive refresh", async ({ page, request }) => {
+test("duplicate rejection and watchlist archive/re-add survive refresh", async ({ page }) => {
+  const request = page.request;
   expect((await request.post("/api/demo/reset")).ok()).toBeTruthy();
   expect((await request.post("/api/demo/advance")).ok()).toBeTruthy();
   await ensureWatched(request, "NSE:RELIANCE");

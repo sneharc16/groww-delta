@@ -9,7 +9,7 @@ import type { CorporateActionReviewRepository, WatchIntentRepository, CreateInte
 import type { MarketDataProvider } from "@/server/market/providers/market-data-provider";
 import { formatINRLevelFromPaise } from "@/lib/format/market";
 
-export const corporateDecisionSchema = z.object({ eventId: z.string().min(1), decision: z.enum(["ADJUST", "KEEP", "LATER"]) }).strict();
+export const corporateDecisionSchema = z.object({ eventId: z.string().min(1).max(200), decision: z.enum(["ADJUST", "KEEP", "LATER"]) }).strict();
 export class CorporateActionService {
   constructor(private readonly reviews: CorporateActionReviewRepository, private readonly intents: WatchIntentRepository, private readonly market: MarketDataProvider) {}
   async decide(userId: string, logicalIntentId: string, untrusted: unknown) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useId, type ReactNode } from "react";
 
 export function Dialog({ open, title, description, onClose, children }: {
   open: boolean;
@@ -10,6 +10,7 @@ export function Dialog({ open, title, description, onClose, children }: {
   onClose: () => void;
   children: ReactNode;
 }) {
+  const titleId = useId();
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -20,10 +21,10 @@ export function Dialog({ open, title, description, onClose, children }: {
   }, [open]);
 
   return (
-    <dialog ref={ref} className="dialog" onClose={onClose} onCancel={onClose} aria-labelledby="dialog-title">
+    <dialog ref={ref} className="dialog" onClose={onClose} onCancel={onClose} aria-labelledby={titleId}>
       <div className="dialog-header">
         <div>
-          <h2 id="dialog-title">{title}</h2>
+          <h2 id={titleId}>{title}</h2>
           {description ? <p>{description}</p> : null}
         </div>
         <button className="icon-button" type="button" onClick={onClose} aria-label="Close dialog"><X size={20} /></button>

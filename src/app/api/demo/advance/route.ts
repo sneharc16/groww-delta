@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
-import { apiError } from "@/lib/validation/api";
-import { services } from "@/server/container";
+import { withSession } from "@/server/session/request";
 
-export async function POST() {
-  try {
+export async function POST(request: Request) {
+  return withSession(request, async ({ services }) => {
     return NextResponse.json(await services.demo.advance());
-  } catch (error: unknown) {
-    return apiError(error);
-  }
+  });
 }

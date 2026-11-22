@@ -64,6 +64,9 @@ export function toIntentDto(intent: WatchIntentRecord): WatchIntentDto {
 
 export function toEventDto(event: MarketEventRecord): MarketEventDto {
   return {
+    sourceEventId: event.sourceEventId ?? event.id,
+    eventVersion: event.eventVersion ?? 1,
+    scenarioVersion: event.scenarioVersion ?? "1.0.0",
     id: event.id,
     sequence: event.sequence,
     instrumentId: event.instrumentId,
@@ -93,6 +96,7 @@ export function toCursorDto(cursor: KnowledgeCursorRecord): KnowledgeCursorDto {
 
 export function toAttentionItemDto(item: AttentionItem): AttentionItemDto {
   return {
+    decisionTrace: item.decisionTrace,
     conditionAssessments: item.conditionAssessments, lastConfirmedSnapshot: item.lastConfirmedSnapshot ? toSnapshotDto(item.lastConfirmedSnapshot) : null,
     trust: item.trust, trustNotices: item.trustNotices, trustedBaselineSnapshotId: item.trustedBaselineSnapshotId,
     marketAdjustedDeltaBps: item.marketAdjustedDeltaBps, groupedMarketMove: item.groupedMarketMove,

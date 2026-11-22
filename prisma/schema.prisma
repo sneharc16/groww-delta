@@ -119,6 +119,7 @@ model User {
   displayName      String
   createdAt        DateTime                   @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime                   @updatedAt @db.Timestamptz(3)
+  anonymousSession AnonymousSession?
   watchlists       Watchlist[]
   watchIntents     WatchIntent[]
   knowledgeCursors KnowledgeCursor[]
@@ -204,7 +205,7 @@ model WatchIntent {
   supersedes                       WatchIntent?     @relation("IntentVersions", fields: [supersedesId], references: [id], onDelete: Restrict)
   supersededBy                     WatchIntent?     @relation("IntentVersions")
 
-  @@unique([logicalIntentId, version])
+  @@unique([userId, logicalIntentId, version])
   @@index([userId, instrumentId, status])
 }
 
@@ -226,6 +227,7 @@ model KnowledgeCursor {
 }
 
 model MarketSnapshot {
+  scenarioVersion String @default("1.0.0")
   scenarioId String @default("groww-delta-default")
   receivedTime DateTime? @db.Timestamptz(3)
   id                       String            @id
@@ -245,11 +247,14 @@ model MarketSnapshot {
   instrument               Instrument        @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
   observedByCursors        KnowledgeCursor[]
 
-  @@unique([scenarioId, instrumentId, sequence])
+  @@unique([scenarioId, scenarioVersion, instrumentId, sequence], map: "MarketSnapshot_scenario_version_instrument_sequence")
   @@index([sequence])
 }
 
 model MarketEvent {
+  scenarioVersion String @default("1.0.0")
+  sourceEventId String?
+  eventVersion Int @default(1)
   scenarioId String @default("groww-delta-default")
   id             String            @id
   sequence       Int
@@ -271,6 +276,9 @@ model MarketEvent {
 
   @@index([sequence])
   @@index([instrumentId, sequence])
+  @@index([scenarioId, sequence])
+  @@index([scenarioId, scenarioVersion, sequence], map: "MarketEvent_scenario_version_sequence_idx")
+  @@index([correctionOfId])
 }
 
 model WatchGraph {
@@ -296,7 +304,7 @@ model WatchGraph {
   nodes                 WatchGraphNode[]
   edges                 WatchGraphEdge[]
 
-  @@unique([logicalGraphId, version])
+  @@unique([userId, logicalGraphId, version])
   @@index([userId, watchIntentLogicalId, status])
   @@index([instrumentId])
 }
@@ -314,6 +322,7 @@ model WatchGraphNode {
   incoming  WatchGraphEdge[]   @relation("GraphEdgeTo")
 
   @@unique([graphId, nodeKey])
+  @@unique([graphId, id])
   @@index([graphId, type])
 }
 
@@ -351,6 +360,8 @@ model KnowledgeAcknowledgement {
 }
 
 model DemoSession {
+  scenarioVersion String @default("1.0.0")
+  anonymousSession AnonymousSession?
   providerStatus ProviderStatus @default(HEALTHY)
   lastHealthySequence Int @default(0)
   generation Int @default(0)
@@ -377,4 +388,36 @@ model CorporateActionReview {
   decidedAt DateTime @default(now()) @db.Timestamptz(3)
 
   @@unique([userId, logicalIntentId, eventId, demoGeneration], map: "CorporateActionReview_identity_key")
+}
+
+model AnonymousSession {
+  id String @id
+  tokenHash String @unique
+  userId String @unique
+  demoSessionId String @unique
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  expiresAt DateTime @db.Timestamptz(3)
+  showGroupedMoves Boolean @default(false)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  demo DemoSession @relation(fields: [demoSessionId], references: [id], onDelete: Cascade)
+  mutations MutationReceipt[]
+  @@index([expiresAt])
+}
+model MutationReceipt {
+  id String @id @default(cuid())
+  sessionId String
+  key String
+  requestHash String
+  status Int
+  response Json
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  session AnonymousSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  @@unique([sessionId, key])
+}
+model ReplayDataset {
+  scenarioId String
+  version String
+  contentHash String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@id([scenarioId, version])
 }

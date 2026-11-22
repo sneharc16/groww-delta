@@ -11,8 +11,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body>
+        <a href="#main-content" className="skip-link">Skip to content</a>
         <AppHeader />
-        <main className="page-shell">{children}</main>
+        <main id="main-content" className="page-shell">{children}</main>
       </body>
     </html>
   );

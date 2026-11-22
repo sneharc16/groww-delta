@@ -24,19 +24,23 @@ export class CatchUpService {
     private readonly market: MarketDataProvider,
     private readonly graphs: WatchGraphRepository,
     private readonly corporateReviews?: CorporateActionReviewRepository,
+    private readonly demoSessionId = DEFAULT_DEMO_SESSION_ID,
   ) {}
 
   async getCatchUp(userId: string): Promise<CatchUpDto> {
     const [watchlist, state] = await Promise.all([
       this.watchlists.getDefaultForUser(userId),
-      this.sessions.getById(DEFAULT_DEMO_SESSION_ID),
+      this.sessions.getById(this.demoSessionId),
     ]);
     if (!watchlist) throw new AppError("WATCHLIST_NOT_FOUND", "The default watchlist has not been seeded.", 404);
     if (!state) throw new AppError("INVALID_MARKET_STATE", "The demo market state is unavailable.", 409);
     const providerHealth = await this.market.getHealth();
+    const environment = await this.market.getEnvironment();
     const instrumentIds = watchlist.items.map((item) => item.instrumentId);
     if (instrumentIds.length === 0) {
       return {
+        replayPosition: state.scenarioId + ":" + (state.generation ?? 0) + ":" + state.currentSequence,
+        replayEnvironment: state.scenarioId + ":" + (state.generation ?? 0),
         trustNotices: [], marketContext: null, providerHealth, groupedMarketMoves: [],
         asOfSequence: state.currentSequence,
         asOfTime: state.currentTime.toISOString(),
@@ -62,6 +66,7 @@ export class CatchUpService {
       const cursor = cursorByInstrument.get(watchlistItem.instrumentId);
       if (!cursor) throw new AppError("CURSOR_NOT_FOUND", `No knowledge cursor exists for ${watchlistItem.instrument.symbol}.`, 409);
       const result = analyzeInstrument({
+        traceContext: { scenarioId: state.scenarioId, scenarioVersion: environment.scenarioVersion ?? "unspecified", scenarioContentHash: environment.scenarioContentHash ?? "unspecified" },
         demoTimeTravel: true, providerHealth, marketContext, corporateDecisions,
         benchmarkDeltaBps: (() => {
           const benchmark = snapshots.filter((row) => row.instrumentId === PRIMARY_BENCHMARK).sort((a, b) => a.sequence - b.sequence);
@@ -110,6 +115,8 @@ export class CatchUpService {
     const allAtSameSequence = cursorRows.every((cursor) => cursor.lastSeenSequence === cursorRows[0]?.lastSeenSequence);
     const commonTimes = new Set(cursorRows.map((cursor) => cursor.lastSeenEventTime?.toISOString() ?? null));
     return {
+      replayPosition: state.scenarioId + ":" + (state.generation ?? 0) + ":" + state.currentSequence,
+      replayEnvironment: state.scenarioId + ":" + (state.generation ?? 0),
       trustNotices, marketContext, providerHealth, groupedMarketMoves,
       asOfSequence: state.currentSequence,
       asOfTime: state.currentTime.toISOString(),
@@ -131,7 +138,7 @@ export class CatchUpService {
   async acknowledge(userId: string, input: AcknowledgeInput) {
     const [watchlist, state] = await Promise.all([
       this.watchlists.getDefaultForUser(userId),
-      this.sessions.getById(DEFAULT_DEMO_SESSION_ID),
+      this.sessions.getById(this.demoSessionId),
     ]);
     if (!watchlist) throw new AppError("WATCHLIST_NOT_FOUND", "The default watchlist has not been seeded.", 404);
     if (!state) throw new AppError("INVALID_MARKET_STATE", "The demo market state is unavailable.", 409);

@@ -1,12 +1,13 @@
 import { Prisma } from "@/generated/prisma/client";
-import { prisma } from "@/lib/db/client";
+import { database, type Database } from "./database";
 import { AppError } from "@/lib/errors/app-error";
 import type { CorporateActionReviewRepository } from "./contracts";
 
 export class PrismaCorporateActionReviewRepository implements CorporateActionReviewRepository {
-  list(userId: string, scenarioId: string, demoGeneration = 0) { return prisma.corporateActionReview.findMany({ where: { userId, scenarioId, demoGeneration }, orderBy: { decidedAt: "asc" } }); }
+  constructor(private readonly db: Database = database) {}
+  list(userId: string, scenarioId: string, demoGeneration = 0) { return this.db.corporateActionReview.findMany({ where: { userId, scenarioId, demoGeneration }, orderBy: { decidedAt: "asc" } }); }
   decide(input: Parameters<CorporateActionReviewRepository["decide"]>[0], previousIntentId: string, nextIntent?: Parameters<CorporateActionReviewRepository["decide"]>[2]) {
-    return prisma.$transaction(async (transaction) => {
+    return this.db.$transaction(async (transaction) => {
       const existing = await transaction.corporateActionReview.findUnique({ where: { userId_logicalIntentId_eventId_demoGeneration: { userId: input.userId, logicalIntentId: input.logicalIntentId, eventId: input.eventId, demoGeneration: input.demoGeneration } } });
       if (existing && existing.decision !== "LATER") return existing;
       if (nextIntent) {

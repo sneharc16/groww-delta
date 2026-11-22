@@ -1,3 +1,4 @@
+import { REFERENCE_POLICY } from "@/domain/policy/reference";
 import type { WatchIntentRecord } from "@/domain/intent/types";
 import type { MarketEventRecord, MarketSnapshotRecord } from "@/domain/market/types";
 import {
@@ -43,8 +44,8 @@ function priceMatch(intent: WatchIntentRecord, snapshots: MarketSnapshotRecord[]
         type: intent.type,
         originalText: intent.originalText,
         reasonCode,
-        urgency: reasonCode === "PRICE_TARGET_NEAR_ENTERED" ? 80 : 100,
-        relevance: 100,
+        urgency: reasonCode === "PRICE_TARGET_NEAR_ENTERED" ? REFERENCE_POLICY.urgency.near : REFERENCE_POLICY.urgency.crossing,
+        relevance: REFERENCE_POLICY.directRelevance,
         eventIds: [],
         transitionSnapshotIds: [previous.id, current.id],
         metadata: { targetPricePaise: target, fromPricePaise: previous.pricePaise, toPricePaise: current.pricePaise },
@@ -65,7 +66,7 @@ function eventMatch(intent: WatchIntentRecord, events: MarketEventRecord[]): Int
     originalText: intent.originalText,
     reasonCode,
     urgency,
-    relevance: 100,
+    relevance: REFERENCE_POLICY.directRelevance,
     eventIds: [event.id],
     transitionSnapshotIds: [],
     metadata,
@@ -83,7 +84,7 @@ function eventMatch(intent: WatchIntentRecord, events: MarketEventRecord[]): Int
       const eventFocus = Array.isArray(data.focus) ? data.focus.filter((item): item is string => typeof item === "string") : [];
       return parsed.data.focus.some((focus) => eventFocus.includes(focus));
     });
-    return event ? match(event, "EARNINGS_EVENT_MATCHED", 70, { quarterLabel: String(payload(event).quarterLabel ?? "") }) : null;
+    return event ? match(event, "EARNINGS_EVENT_MATCHED", REFERENCE_POLICY.urgency.earnings, { quarterLabel: String(payload(event).quarterLabel ?? "") }) : null;
   }
 
   if (intent.type === "TECHNICAL") {
@@ -92,14 +93,14 @@ function eventMatch(intent: WatchIntentRecord, events: MarketEventRecord[]): Int
     const event = events.find((candidate) => candidate.type === "TECHNICAL_TRANSITION"
       && payload(candidate).setup === parsed.data.setup
       && (parsed.data.referenceLevelPaise === undefined || payload(candidate).referenceLevelPaise === undefined || payload(candidate).referenceLevelPaise === parsed.data.referenceLevelPaise));
-    return event ? match(event, "TECHNICAL_SETUP_MATCHED", 70, { setup: parsed.data.setup }) : null;
+    return event ? match(event, "TECHNICAL_SETUP_MATCHED", REFERENCE_POLICY.urgency.technical, { setup: parsed.data.setup }) : null;
   }
 
   if (intent.type === "DRIVER") {
     const parsed = driverPayloadSchema.safeParse(intent.structuredPayload);
     if (!parsed.success) return null;
     const event = events.find((candidate) => candidate.type === "EXTERNAL_DRIVER" && payload(candidate).driverKey === parsed.data.driverKey);
-    return event ? match(event, "DRIVER_EVENT_MATCHED", 60, { driverKey: parsed.data.driverKey }) : null;
+    return event ? match(event, "DRIVER_EVENT_MATCHED", REFERENCE_POLICY.urgency.driver, { driverKey: parsed.data.driverKey }) : null;
   }
 
   if (intent.type === "DIVIDEND") {
@@ -110,14 +111,14 @@ function eventMatch(intent: WatchIntentRecord, events: MarketEventRecord[]): Int
       const stage = payload(candidate).stage;
       return parsed.data.focus === "GENERAL" || stage === undefined || stage === parsed.data.focus;
     });
-    return event ? match(event, "DIVIDEND_EVENT_MATCHED", 60, { focus: parsed.data.focus }) : null;
+    return event ? match(event, "DIVIDEND_EVENT_MATCHED", REFERENCE_POLICY.urgency.dividend, { focus: parsed.data.focus }) : null;
   }
 
   if (intent.type === "COMPANY_EVENT") {
     const parsed = companyEventPayloadSchema.safeParse(intent.structuredPayload);
     if (!parsed.success) return null;
     const event = events.find((candidate) => candidate.type === "CORPORATE_EVENT" && payload(candidate).eventKind === parsed.data.eventKind);
-    return event ? match(event, "COMPANY_EVENT_MATCHED", 60, { eventKind: parsed.data.eventKind }) : null;
+    return event ? match(event, "COMPANY_EVENT_MATCHED", REFERENCE_POLICY.urgency.companyEvent, { eventKind: parsed.data.eventKind }) : null;
   }
 
   return null;

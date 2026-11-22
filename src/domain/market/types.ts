@@ -1,8 +1,10 @@
 export type MarketQuality = "FRESH" | "DELAYED" | "STALE" | "CONFLICTING" | "CORRECTED";
-export type MarketEventType = "QUOTE_UPDATE" | "RESULTS_PUBLISHED" | "TECHNICAL_TRANSITION" | "CORPORATE_EVENT" | "EXTERNAL_DRIVER" | "NEWS_EVENT";
+export const MARKET_EVENT_TYPES = ["QUOTE_UPDATE", "RESULTS_PUBLISHED", "TECHNICAL_TRANSITION", "CORPORATE_EVENT", "EXTERNAL_DRIVER", "NEWS_EVENT"] as const;
+export type MarketEventType = typeof MARKET_EVENT_TYPES[number];
 export type EventSubjectType = "INSTRUMENT" | "METRIC" | "DRIVER" | "EXTERNAL_DRIVER" | "EVENT_CATEGORY" | "PRICE_CONDITION";
 
 export interface MarketSnapshotRecord {
+  scenarioVersion?: string;
   scenarioId?: string;
   receivedTime?: Date | null;
   id: string;
@@ -21,6 +23,9 @@ export interface MarketSnapshotRecord {
 }
 
 export interface MarketEventRecord {
+  scenarioVersion?: string;
+  sourceEventId?: string | null;
+  eventVersion?: number;
   scenarioId?: string;
   id: string;
   sequence: number;
@@ -38,6 +43,7 @@ export interface MarketEventRecord {
 }
 
 export interface DemoStateRecord {
+  scenarioVersion?: string;
   providerStatus?: "HEALTHY" | "DEGRADED" | "UNAVAILABLE";
   lastHealthySequence?: number;
   generation?: number;

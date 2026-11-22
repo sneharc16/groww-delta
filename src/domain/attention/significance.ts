@@ -1,13 +1,7 @@
+import { REFERENCE_POLICY } from "@/domain/policy/reference";
 import type { MarketEventType, MarketSnapshotRecord } from "@/domain/market/types";
 
-export const EVENT_SIGNIFICANCE: Record<MarketEventType, number> = {
-  RESULTS_PUBLISHED: 90,
-  CORPORATE_EVENT: 80,
-  TECHNICAL_TRANSITION: 60,
-  EXTERNAL_DRIVER: 60,
-  NEWS_EVENT: 50,
-  QUOTE_UPDATE: 0,
-};
+export const EVENT_SIGNIFICANCE: Record<MarketEventType, number> = REFERENCE_POLICY.significance.events;
 
 export function calculatePriceDeltaBps(baselinePricePaise: number, currentPricePaise: number): number {
   if (baselinePricePaise <= 0) return 0;
@@ -21,20 +15,15 @@ export function calculateExpectedWindowMoveBps(snapshots: MarketSnapshotRecord[]
   return Math.sqrt(variance);
 }
 
-export function priceSignificanceFromSurprise(priceSurprise: number): number {
-  if (priceSurprise < 1) return 0;
-  if (priceSurprise < 1.5) return 30;
-  if (priceSurprise < 2) return 50;
-  if (priceSurprise < 3) return 70;
-  return 90;
+function bucket(value: number, bounds: readonly number[]): number {
+  const index = bounds.findIndex(bound => value < bound);
+  return REFERENCE_POLICY.significance.bucketScores[index < 0 ? bounds.length : index];
 }
-
+export function priceSignificanceFromSurprise(priceSurprise: number): number {
+  return bucket(priceSurprise, REFERENCE_POLICY.significance.surpriseBounds);
+}
 export function priceSignificanceFromAbsoluteBps(absoluteDeltaBps: number): number {
-  if (absoluteDeltaBps < 50) return 0;
-  if (absoluteDeltaBps < 100) return 30;
-  if (absoluteDeltaBps < 200) return 50;
-  if (absoluteDeltaBps < 400) return 70;
-  return 90;
+  return bucket(absoluteDeltaBps, REFERENCE_POLICY.significance.absoluteBpsBounds);
 }
 
 export function calculatePriceSignificance(priceDeltaBps: number, expectedWindowMoveBps: number | null) {
@@ -55,18 +44,14 @@ export function calculateVolumeRatio(snapshot: MarketSnapshotRecord): number | n
 }
 
 export function volumeSignificanceFromRatio(ratio: number | null): number {
-  if (ratio === null || ratio < 1.3) return 0;
-  if (ratio < 1.5) return 30;
-  if (ratio < 2) return 50;
-  if (ratio < 3) return 70;
-  return 90;
+  return ratio === null ? 0 : bucket(ratio, REFERENCE_POLICY.significance.volumeBounds);
 }
 
 export function combineSignificance(price: number, volume: number, event: number) {
   const nonZeroSignalCount = [price, volume, event].filter((value) => value > 0).length;
   const multipleSignals = nonZeroSignalCount >= 2;
   return {
-    significance: Math.min(100, Math.max(price, volume, event) + (multipleSignals ? 10 : 0)),
+    significance: Math.min(100, Math.max(price, volume, event) + (multipleSignals ? REFERENCE_POLICY.significance.multiSignalBonus : 0)),
     multipleSignals,
   };
 }

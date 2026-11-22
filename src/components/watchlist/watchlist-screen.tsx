@@ -84,7 +84,7 @@ export function WatchlistScreen() {
     if (!editing) return;
     const url = editing.intent ? `/api/watch-intents/${editing.intent.logicalIntentId}` : "/api/watch-intents";
     const body = editing.intent ? input : { instrumentId: editing.item.instrument.id, intent: input };
-    await apiFetch(url, { method: editing.intent ? "PATCH" : "POST", body: JSON.stringify(body) });
+    await apiFetch(url, { method: editing.intent ? "PATCH" : "POST", headers: editing.intent ? { "If-Match": String(editing.intent.version) } : {}, body: JSON.stringify(body) });
     await load();
     setToast(editing.intent ? "Watch reason updated" : "Watch reason added");
   }

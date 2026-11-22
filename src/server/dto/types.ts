@@ -71,6 +71,7 @@ export interface WatchlistDto {
 }
 
 export interface DemoStateDto {
+  generation: number;
   scenario: { id: string; name: string; totalSteps: number; timezone: string };
   currentStep: number;
   currentSequence: number;
@@ -79,6 +80,9 @@ export interface DemoStateDto {
 }
 
 export interface MarketEventDto {
+  sourceEventId: string;
+  eventVersion: number;
+  scenarioVersion: string;
   id: string;
   sequence: number;
   instrumentId: string | null;
@@ -104,6 +108,7 @@ export interface KnowledgeCursorDto {
 }
 
 export interface AttentionItemDto {
+  decisionTrace: import("@/domain/attention/trace").AttentionDecisionTrace;
   conditionAssessments: import("@/domain/trust/price-conditions").PriceConditionAssessment[];
   lastConfirmedSnapshot: MarketSnapshotDto | null;
   trust: import("@/domain/trust/types").DataTrust;
@@ -154,6 +159,8 @@ export interface AttentionItemDto {
 }
 
 export interface CatchUpDto {
+  replayPosition: string;
+  replayEnvironment: string;
   trustNotices: import("@/domain/trust/types").TrustNotice[];
   marketContext: import("@/domain/market/context").MarketContext | null;
   providerHealth: import("@/domain/trust/types").MarketProviderHealth;

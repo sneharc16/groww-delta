@@ -1,6 +1,6 @@
 {
   "name": "groww-delta",
-  "version": "0.1.0",
+  "version": "5.0.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.25.0",
@@ -14,7 +14,7 @@
     "test": "vitest run",
     "test:scenarios": "tsx scripts/verify-scenarios.ts",
     "test:seed": "tsx scripts/verify-seed.ts",
-    "test:db": "tsx scripts/verify-database.ts",
+    "test:db": "tsx scripts/verify-database.ts && tsx scripts/verify-build5-database.ts",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "db:up": "docker compose up -d postgres",
@@ -22,7 +22,12 @@
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
-    "db:generate": "prisma generate"
+    "db:generate": "prisma generate",
+    "research:replay": "tsx research/scripts/replay.ts",
+    "research:export": "tsx research/scripts/replay.ts",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "benchmark": "tsx research/scripts/benchmark.ts",
+    "benchmark:db": "tsx scripts/benchmark-database.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",
@@ -37,6 +42,7 @@
     "zod": "4.5.4"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@playwright/test": "1.62.1",
     "@tailwindcss/postcss": "4.3.3",
     "@testing-library/jest-dom": "6.9.1",
@@ -54,5 +60,8 @@
     "tsx": "4.21.0",
     "typescript": "6.0.3",
     "vitest": "5.0.0"
+  },
+  "engines": {
+    "node": ">=22.12.0 <25"
   }
 }

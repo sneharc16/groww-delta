@@ -1,13 +1,9 @@
 import { NextResponse } from "next/server";
-import { DEMO_USER_ID } from "@/lib/constants";
-import { apiError } from "@/lib/validation/api";
-import { services } from "@/server/container";
+import { withSession } from "@/server/session/request";
 
-export async function POST(_request: Request, context: { params: Promise<{ logicalIntentId: string }> }) {
-  try {
+export async function POST(request: Request, context: { params: Promise<{ logicalIntentId: string }> }) {
+  return withSession(request, async ({ services, userId }) => {
     const { logicalIntentId } = await context.params;
-    return NextResponse.json({ intent: await services.intentLifecycle.keepWatching(DEMO_USER_ID, logicalIntentId) });
-  } catch (error: unknown) {
-    return apiError(error);
-  }
+    return NextResponse.json({ intent: await services.intentLifecycle.keepWatching(userId, logicalIntentId) });
+  });
 }

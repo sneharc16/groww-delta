@@ -1,34 +1,27 @@
 import { NextResponse } from "next/server";
-import { DEMO_USER_ID } from "@/lib/constants";
 import { saveWatchGraphSchema } from "@/lib/validation/watch-graph";
-import { apiError, parseJson } from "@/lib/validation/api";
-import { services } from "@/server/container";
+import { parseJson } from "@/lib/validation/api";
+import { withSession } from "@/server/session/request";
 
-export async function GET(_request: Request, context: { params: Promise<{ logicalIntentId: string }> }) {
-  try {
+export async function GET(request: Request, context: { params: Promise<{ logicalIntentId: string }> }) {
+  return withSession(request, async ({ services, userId }) => {
     const { logicalIntentId } = await context.params;
-    return NextResponse.json(await services.watchGraphs.get(DEMO_USER_ID, logicalIntentId));
-  } catch (error: unknown) {
-    return apiError(error);
-  }
+    return NextResponse.json(await services.watchGraphs.get(userId, logicalIntentId));
+  });
 }
 
 export async function POST(request: Request, context: { params: Promise<{ logicalIntentId: string }> }) {
-  try {
+  return withSession(request, async ({ services, userId }) => {
     const { logicalIntentId } = await context.params;
     const input = await parseJson(request, saveWatchGraphSchema);
-    return NextResponse.json({ graph: await services.watchGraphs.create(DEMO_USER_ID, logicalIntentId, input) }, { status: 201 });
-  } catch (error: unknown) {
-    return apiError(error);
-  }
+    return NextResponse.json({ graph: await services.watchGraphs.create(userId, logicalIntentId, input) }, { status: 201 });
+  });
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ logicalIntentId: string }> }) {
-  try {
+  return withSession(request, async ({ services, userId }) => {
     const { logicalIntentId } = await context.params;
     const input = await parseJson(request, saveWatchGraphSchema);
-    return NextResponse.json({ graph: await services.watchGraphs.edit(DEMO_USER_ID, logicalIntentId, input) });
-  } catch (error: unknown) {
-    return apiError(error);
-  }
+    return NextResponse.json({ graph: await services.watchGraphs.edit(userId, logicalIntentId, input) });
+  });
 }

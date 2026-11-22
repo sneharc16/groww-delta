@@ -1,12 +1,8 @@
 import { NextResponse } from "next/server";
-import { apiError } from "@/lib/validation/api";
-import { services } from "@/server/container";
-import { DEMO_USER_ID } from "@/lib/constants";
+import { withSession } from "@/server/session/request";
 
-export async function POST() {
-  try {
-    return NextResponse.json(await services.demo.reset(DEMO_USER_ID));
-  } catch (error: unknown) {
-    return apiError(error);
-  }
+export async function POST(request: Request) {
+  return withSession(request, async ({ services, userId }) => {
+    return NextResponse.json(await services.demo.reset(userId));
+  });
 }

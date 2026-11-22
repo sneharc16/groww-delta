@@ -1,0 +1,38 @@
+name: Reference implementation verification
+on:
+  push:
+    branches: [main, build5-final]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: delta_test
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/delta_test
+      DEMO_MODE: "true"
+      BUILD_COMMIT: ${{ github.sha }}
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:migrate:deploy
+      - run: pnpm db:seed
+      - run: pnpm test:seed
+      - run: pnpm test:db
+      - run: pnpm verify
+      - run: pnpm research:export
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: PLAYWRIGHT_USE_BUILD=true pnpm test:e2e --reporter=github,list

@@ -18,7 +18,8 @@ async function advance(request: APIRequestContext, steps = 1) {
   for (let step = 0; step < steps; step++) expect((await request.post("/api/demo/advance")).ok()).toBeTruthy();
 }
 
-test("stale price is withheld and the later fresh quote confirms the saved range", async ({ page, request }) => {
+test("stale price is withheld and the later fresh quote confirms the saved range", async ({ page }) => {
+  const request = page.request;
   await page.setViewportSize({ width: 390, height: 844 });
   await selectScenario(page, request, "data-quality");
   await page.getByRole("button", { name: "Advance market 30 minutes" }).click();
@@ -32,7 +33,8 @@ test("stale price is withheld and the later fresh quote confirms the saved range
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test("previously acknowledged results receive a correction notice without repeating the original", async ({ page, request }) => {
+test("previously acknowledged results receive a correction notice without repeating the original", async ({ page }) => {
+  const request = page.request;
   await selectScenario(page, request, "data-quality");
   expect((await request.patch("/api/watch-intents/intent%3Atcs%3Aearnings", { data: {
     type: "EARNINGS", originalText: "Watching Q2 margins",
@@ -52,7 +54,8 @@ test("previously acknowledged results receive a correction notice without repeat
   await expect(correction).toHaveCount(0);
 });
 
-test("Calm Mode groups broad moves, keeps an explicit condition, and surfaces the later residual", async ({ page, request }) => {
+test("Calm Mode groups broad moves, keeps an explicit condition, and surfaces the later residual", async ({ page }) => {
+  const request = page.request;
   await selectScenario(page, request, "market-shock");
   await advance(request);
   await page.goto("/");
@@ -67,7 +70,8 @@ test("Calm Mode groups broad moves, keeps an explicit condition, and surfaces th
   await expect(page.getByTestId("attention-RELIANCE")).toContainText("relative to the broader market");
 });
 
-test("a split creates review instead of a false target hit and adjustment creates history", async ({ page, request }) => {
+test("a split creates review instead of a false target hit and adjustment creates history", async ({ page }) => {
+  const request = page.request;
   await selectScenario(page, request, "corporate-action");
   const before = await (await request.get("/api/watch-intents?instrumentId=NSE%3AHDFCBANK")).json();
   await advance(request);

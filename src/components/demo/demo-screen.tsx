@@ -38,7 +38,7 @@ export function DemoScreen() {
   async function change(action: "advance" | "reset") {
     setBusy(true); setMessage(null);
     try {
-      const result = await apiFetch<DemoStateDto & { advanced?: boolean; message?: string }>(`/api/demo/${action}`, { method: "POST" });
+      const result = await apiFetch<DemoStateDto & { advanced?: boolean; message?: string }>(`/api/demo/${action}`, { method: "POST", headers: state ? { "X-Delta-Position": `${state.scenario.id}:${state.generation}:${state.currentSequence}` } : {} });
       await load();
       setMessage(result.message ?? (action === "advance" ? "The simulated market advanced by 30 minutes." : "Scenario reset to the starting point."));
     } catch (caught: unknown) { setError(caught instanceof Error ? caught.message : "Could not update the demo."); }
@@ -67,7 +67,7 @@ export function DemoScreen() {
       <div className="two-column">
         <section className="card section-card demo-controller">
           <div className="demo-clock"><span>Current simulated time</span><strong data-testid="demo-time">{formatISTTime(state.currentTime)}</strong><small>Asia/Kolkata · Step {state.currentStep} / {state.scenario.totalSteps}</small></div>
-          <div className="progress-track" aria-label={`Replay step ${state.currentStep} of ${state.scenario.totalSteps}`}>
+          <div className="progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={state.scenario.totalSteps} aria-valuenow={state.currentStep} aria-label={`Replay step ${state.currentStep} of ${state.scenario.totalSteps}`}>
             <span style={{ width: `${(state.currentStep / state.scenario.totalSteps) * 100}%` }} />
           </div>
           <div className="action-row">
